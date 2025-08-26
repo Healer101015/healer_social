@@ -1,0 +1,69 @@
+import express from "express";
+import multer from "multer";
+import path from "path";
+import Post from "../models/Post.js";
+import { authRequired } from "../middleware/auth.js";
+
+const router = express.Router();
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, Date.now() + "_" + Math.round(Math.random() * 1e9) + ext);
+  }
+});
+const upload = multer({ storage });
+
+// List feed (latest first)
+router.get("/", authRequired, async (req, res) => {
+  const posts = await Post.find()
+    .populate("user", "name avatarUrl")
+    .populate("comments.user", "name avatarUrl")
+    .sort({ createdAt: -1 })
+    .limit(100);
+  res.json(posts);
+});
+
+// Create text post
+router.post("/", authRequired, async (req, res) => {
+  try {
+    const post = await Post.create({ user: req.userId, text: req.body.text || "" });
+    res.json(await post.populate("user", "name avatarUrl"));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Create post with media
+router.post("/media", authRequired, upload.single("media"), async (req, res) => {
+  try {
+    const file = req.file;
+    const mediaUrl = file ? `/uploads/${file.filename}` : "";
+    const mediaType = file ? (file.mimetype.startsWith("video") ? "video" : "image") : "";
+    const post = await Post.create({ user: req.userId, text: req.body.text || "", mediaUrl, mediaType });
+    res.json(await post.populate("user", "name avatarUrl"));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Like / unlike
+router.post("/:id/like", authRequired, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ error: "Post not found" });
+  const has = post.likes.some(id => id.toString() === req.userId);
+  if (has) post.likes = post.likes.filter(id => id.toString() !== req.userId);
+  else post.likes.push(req.userId);
+  await post.save();
+  res.json({ likes: post.likes.length });
+});
+
+// Comment
+router.post("/:id/comment", authRequired, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ error: "Post not found" });
+  const c = { user: req.userId, text: req.body.text };
+  post.comments.push(c);
+  await post.save();
+  const populated = await Post.findById(post._id).populate("comments.user", "name avatarUrl");
+  res.json(populated.comments[populated.comments.length - 1]);
+});
+
+export default router;
