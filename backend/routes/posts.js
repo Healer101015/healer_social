@@ -25,21 +25,14 @@ router.get("/", authRequired, async (req, res) => {
   res.json(posts);
 });
 
-// Create text post
-router.post("/", authRequired, async (req, res) => {
+// Create post (with or without media)
+router.post("/", authRequired, upload.single("media"), async (req, res) => {
   try {
-    const post = await Post.create({ user: req.userId, text: req.body.text || "" });
-    res.json(await post.populate("user", "name avatarUrl"));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Create post with media
-router.post("/media", authRequired, upload.single("media"), async (req, res) => {
-  try {
+    const { text } = req.body;
     const file = req.file;
     const mediaUrl = file ? `/uploads/${file.filename}` : "";
     const mediaType = file ? (file.mimetype.startsWith("video") ? "video" : "image") : "";
-    const post = await Post.create({ user: req.userId, text: req.body.text || "", mediaUrl, mediaType });
+    const post = await Post.create({ user: req.userId, text: text || "", mediaUrl, mediaType });
     res.json(await post.populate("user", "name avatarUrl"));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
