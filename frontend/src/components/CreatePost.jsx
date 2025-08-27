@@ -16,13 +16,15 @@ export default function CreatePost({ onCreated }) {
       fd.append("text", text);
       if (file) fd.append("media", file);
 
-      await api.post("/posts", fd, {
+      // Captura o post criado que a API retorna
+      const { data: newPost } = await api.post("/posts", fd, {
         headers: { "Content-Type": "multipart/form-data" }
       });
 
       setText("");
       setFile(null);
-      onCreated && onCreated();
+      // Envia o novo post para a página Home para atualizar o feed
+      onCreated && onCreated(newPost);
     } catch (err) {
       console.error("Erro ao publicar:", err);
     } finally {
