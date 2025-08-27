@@ -12,6 +12,7 @@ import multer from "multer";
 import fs from "fs";
 
 import Message from "./models/Message.js";
+import Notification from "./models/Notification.js"; // Importar o modelo
 
 import authRoutes from "./routes/auth.js";
 import postRoutes from "./routes/posts.js";
@@ -134,7 +135,17 @@ io.on("connection", (socket) => {
       if (tempId) messageData.tempId = tempId;
 
       const recipientSocketId = activeUsers.get(recipientId);
-      if (recipientSocketId) io.to(recipientSocketId).emit("receiveMessage", messageData);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("receiveMessage", messageData);
+        // Criar e emitir notificação de nova mensagem
+        const notification = await Notification.create({
+          recipient: recipientId,
+          sender: socket.userId,
+          type: 'NEW_MESSAGE'
+        });
+        await notification.populate('sender', 'name avatarUrl');
+        io.to(recipientSocketId).emit("new_notification", notification);
+      }
 
       socket.emit("messageSent", messageData);
     } catch (error) {

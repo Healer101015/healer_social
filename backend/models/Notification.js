@@ -6,7 +6,7 @@ const NotificationSchema = new mongoose.Schema({
     // Quem originou a notificação
     sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     // Tipo da notificação
-    type: { type: String, enum: ["FRIEND_REQUEST", "FRIEND_ACCEPT", "LIKE", "COMMENT"], required: true },
+    type: { type: String, enum: ["FRIEND_REQUEST", "FRIEND_ACCEPT", "LIKE", "COMMENT", "NEW_MESSAGE"], required: true },
     // ID do Post (para curtidas e comentários)
     postId: { type: mongoose.Schema.Types.ObjectId, ref: "Post" },
     // Status de leitura

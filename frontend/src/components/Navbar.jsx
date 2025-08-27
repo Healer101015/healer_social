@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
+import io from 'socket.io-client';
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { formatDistanceToNow } from "date-fns";
@@ -120,7 +121,21 @@ const NotificationBell = () => {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
+    const interval = setInterval(fetchNotifications, 60000); // Atualiza a cada minuto
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      const socket = io(API_URL, { auth: { token } });
+      socket.on('new_notification', (newNotification) => {
+        setNotifications(prev => [newNotification, ...prev]);
+      });
+
+      return () => {
+        clearInterval(interval);
+        socket.disconnect();
+      };
+    }
+
     return () => clearInterval(interval);
   }, []);
 
@@ -146,6 +161,7 @@ const NotificationBell = () => {
       case 'FRIEND_ACCEPT': return 'aceitou seu pedido de amizade.';
       case 'LIKE': return 'curtiu sua publicação.';
       case 'COMMENT': return 'comentou na sua publicação.';
+      case 'NEW_MESSAGE': return 'enviou uma nova mensagem.';
       default: return 'interagiu com você.';
     }
   }

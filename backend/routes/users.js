@@ -1,3 +1,5 @@
+// backend/routes/users.js
+
 import express from "express";
 import multer from "multer";
 import path from "path";
@@ -39,7 +41,8 @@ router.post("/me", authRequired, upload.fields([{ name: 'avatar', maxCount: 1 },
 router.get("/search", authRequired, async (req, res) => {
   const q = req.query.q || "";
   const re = new RegExp(q, "i");
-  const users = await User.find({ $or: [{ name: re }, { email: re }] }).select("name avatarUrl");
+  // CORREÇÃO: Adicionado "_id" para consistência na busca
+  const users = await User.find({ $or: [{ name: re }, { email: re }] }).select("name avatarUrl _id");
   res.json(users);
 });
 
@@ -74,34 +77,34 @@ router.get("/:id", authRequired, async (req, res) => {
     return res.status(404).json({ error: "Usuário não encontrado" });
   }
 
-  // Incrementar visualização do perfil, exceto se for o próprio utilizador
   if (req.params.id !== req.userId) {
     await User.findByIdAndUpdate(req.params.id, { $inc: { profileViews: 1 } });
   }
 
-  const user = await User.findById(req.params.id).select("-password").populate("friends", "name avatarUrl").lean();
+  const user = await User.findById(req.params.id)
+    .select("-password")
+    .populate("friends", "name avatarUrl _id");
+
   if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
-  const me = await User.findById(req.userId);
-
-  let friendStatus = 'idle';
-  if (me.friends.map(f => f.toString()).includes(user._id.toString())) {
-    friendStatus = 'friends';
-  } else if (me.friendRequests.map(f => f.toString()).includes(user._id.toString())) {
-    friendStatus = 'request_received';
-  } else if (user.friendRequests.map(f => f.toString()).includes(me._id.toString())) {
-    friendStatus = 'request_sent';
-  }
-
+  // --- BLOCO CORRIGIDO ---
+  // Agora, os posts são populados com todas as informações necessárias do usuário
   const posts = await Post.find({ user: user._id })
-    .populate('repostOf') // Popular os dados do post original, se for partilha
+    .populate("user", "name avatarUrl _id") // POPULA O AUTOR DO POST PRINCIPAL
+    .populate("comments.user", "name avatarUrl _id")
+    .populate("reactions.user", "name avatarUrl _id")
     .populate({
       path: 'repostOf',
-      populate: { path: 'user', select: 'name avatarUrl' } // Popular o utilizador do post original
+      populate: [
+        { path: 'user', select: 'name avatarUrl _id' },
+        { path: 'reactions.user', select: 'name avatarUrl _id' },
+        { path: 'comments.user', select: 'name avatarUrl _id' }
+      ]
     })
     .sort({ createdAt: -1 });
+  // --- FIM DO BLOCO CORRIGIDO ---
 
-  res.json({ user, posts, friendStatus });
+  res.json({ user, posts });
 });
 
 export default router;
