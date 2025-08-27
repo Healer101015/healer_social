@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useAuth } from "../context/AuthContext";
 
 // Ícones para ações do post
-const LikeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+const LikeIcon = ({ filled }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform duration-200 ease-in-out ${filled ? 'transform scale-110' : ''}`} viewBox="0 0 20 20" fill="currentColor">
     <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.562 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
   </svg>
 );
@@ -17,14 +18,13 @@ const CommentIcon = () => (
 );
 
 const PostCard = ({ post, onDelete, onChanged }) => {
-  const [me, setMe] = useState(null);
+  const { user: me } = useAuth();
   const [showActions, setShowActions] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comment, setComment] = useState("");
   const actionsRef = useRef(null);
 
   useEffect(() => {
-    api.get("/users/me").then(r => setMe(r.data)).catch(() => { });
     const handleClickOutside = (event) => {
       if (actionsRef.current && !actionsRef.current.contains(event.target)) {
         setShowActions(false);
@@ -36,21 +36,35 @@ const PostCard = ({ post, onDelete, onChanged }) => {
 
   const isOwner = me && post.user && me._id === post.user._id;
   const avatarSrc = post.user?.avatarUrl ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${post.user.avatarUrl}` : null;
+  const hasLiked = me && post.likes?.includes(me._id);
 
-  // Curtir
   const like = async () => {
-    await api.post(`/posts/${post._id}/like`);
-    onChanged && onChanged();
+    if (!onChanged) return;
+
+    const optimisticPost = {
+      ...post,
+      likes: hasLiked
+        ? post.likes.filter(id => id !== me._id)
+        : [...(post.likes || []), me._id],
+    };
+    onChanged(optimisticPost);
+
+    try {
+      const { data: finalPost } = await api.post(`/posts/${post._id}/like`);
+      onChanged(finalPost);
+    } catch (error) {
+      console.error("Falha ao curtir o post, revertendo.", error);
+      onChanged(post);
+    }
   };
 
-  // Adicionar comentário
   const addComment = async (e) => {
     e.preventDefault();
     if (!comment.trim()) return;
-    await api.post(`/posts/${post._id}/comment`, { text: comment });
+    const { data: updatedPost } = await api.post(`/posts/${post._id}/comment`, { text: comment });
     setComment("");
-    setShowCommentInput(false); // fecha input após enviar
-    onChanged && onChanged();
+    setShowCommentInput(false);
+    onChanged && onChanged(updatedPost);
   };
 
   return (
@@ -107,8 +121,8 @@ const PostCard = ({ post, onDelete, onChanged }) => {
         </div>
 
         <div className="flex gap-2 text-gray-600 border-t pt-2 mb-2">
-          <button onClick={like} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-gray-100 transition-colors font-medium">
-            <LikeIcon /> Curtir
+          <button onClick={like} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-gray-100 transition-colors font-medium ${hasLiked ? 'text-sky-600' : 'text-gray-600'}`}>
+            <LikeIcon filled={hasLiked} /> Curtir
           </button>
           <button
             onClick={() => setShowCommentInput(prev => !prev)}
@@ -118,7 +132,6 @@ const PostCard = ({ post, onDelete, onChanged }) => {
           </button>
         </div>
 
-        {/* Input moderno de comentário */}
         {showCommentInput && (
           <form onSubmit={addComment} className="flex items-center gap-2 mb-2">
             <input
@@ -137,7 +150,6 @@ const PostCard = ({ post, onDelete, onChanged }) => {
           </form>
         )}
 
-        {/* Últimos 3 comentários */}
         <div className="space-y-2">
           {post.comments?.slice(-3).map((c, i) => (
             <div key={i} className="text-sm">

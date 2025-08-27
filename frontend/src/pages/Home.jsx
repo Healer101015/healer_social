@@ -6,7 +6,7 @@ import Sidebar from "../components/Sidebar.jsx";
 import CreatePost from "../components/CreatePost.jsx";
 import PostCard from "../components/PostCard.jsx";
 import { api } from "../api";
-import { useAuth } from "../context/AuthContext"; // Requer o AuthContext da melhoria anterior
+import { useAuth } from "../context/AuthContext";
 
 // Componente de Esqueleto para feedback de carregamento
 const PostSkeleton = () => (
@@ -37,27 +37,7 @@ const RightSidebar = () => (
 );
 
 // Componente para o Feed principal
-const Feed = ({ onPostCreated }) => {
-  const { posts, loading, error, hasMore, fetchPosts, updatePost, removePost } = useFeed();
-
-  useEffect(() => {
-    fetchPosts(true);
-  }, [fetchPosts]);
-
-  const handlePostDeleted = useCallback(async (postId) => {
-    try {
-      await api.delete(`/posts/${postId}`); // Requer endpoint no backend
-      removePost(postId);
-    } catch (err) {
-      console.error("Falha ao apagar post:", err);
-    }
-  }, [removePost]);
-
-  // O onChanged agora pode receber o post atualizado para uma atualização otimista
-  const handlePostChanged = useCallback((updatedPost) => {
-    updatePost(updatedPost);
-  }, [updatePost]);
-
+const Feed = ({ posts, loading, error, hasMore, fetchPosts, handlePostChanged, handlePostDeleted }) => {
   if (loading && posts.length === 0) {
     return <div className="space-y-4">{[...Array(3)].map((_, i) => <PostSkeleton key={i} />)}</div>;
   }
@@ -93,20 +73,29 @@ const MainLayout = ({ children }) => (
 // Página Home
 export default function Home() {
   const { user } = useAuth();
-  // A função addPost viria do hook, mas como CreatePost não está no mesmo escopo,
-  // precisamos de uma forma de passar a função para o Feed. Por simplicidade,
-  // vamos recarregar, mas a arquitetura com useFeed permite a atualização otimista.
-  const { addPost } = useFeed();
+  const { posts, loading, error, hasMore, fetchPosts, addPost, updatePost, removePost } = useFeed();
 
   useEffect(() => {
     document.title = "Healer - Feed";
-  }, []);
+    fetchPosts(true);
+  }, [fetchPosts]);
 
   const handlePostCreated = useCallback((newPost) => {
     addPost(newPost);
-    // Ou, para uma solução mais simples sem um contexto de feed:
-    // window.location.reload(); 
   }, [addPost]);
+
+  const handlePostDeleted = useCallback(async (postId) => {
+    try {
+      await api.delete(`/posts/${postId}`);
+      removePost(postId);
+    } catch (err) {
+      console.error("Falha ao apagar post:", err);
+    }
+  }, [removePost]);
+
+  const handlePostChanged = useCallback((updatedPost) => {
+    updatePost(updatedPost);
+  }, [updatePost]);
 
   return (
     <MainLayout>
@@ -115,7 +104,15 @@ export default function Home() {
         <main className="col-span-12 md:col-span-9 lg:col-span-6 space-y-4">
           <h1 className="text-2xl font-bold text-gray-800 px-1">Olá, {user?.name?.split(' ')[0] || ''}!</h1>
           <CreatePost onCreated={handlePostCreated} />
-          <Feed onPostCreated={handlePostCreated} />
+          <Feed
+            posts={posts}
+            loading={loading}
+            error={error}
+            hasMore={hasMore}
+            fetchPosts={fetchPosts}
+            handlePostChanged={handlePostChanged}
+            handlePostDeleted={handlePostDeleted}
+          />
         </main>
         <RightSidebar />
       </div>

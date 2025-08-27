@@ -12,6 +12,8 @@ export const AuthProvider = ({ children }) => {
         const token = localStorage.getItem("token");
         if (token) {
             try {
+                // Adiciona o token ao cabeçalho da API para esta chamada
+                api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 const { data } = await api.get("/users/me");
                 setUser(data);
             } catch (error) {
@@ -27,12 +29,20 @@ export const AuthProvider = ({ children }) => {
         fetchUser();
     }, [fetchUser]);
 
+    const login = (userData, token) => {
+        localStorage.setItem("token", token);
+        // Adiciona o token aos cabeçalhos para futuras requisições
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        setUser(userData);
+    };
+
     const logout = () => {
         localStorage.removeItem("token");
+        delete api.defaults.headers.common['Authorization'];
         setUser(null);
     };
 
-    const value = { user, setUser, loading, logout, refetchUser: fetchUser };
+    const value = { user, setUser, loading, login, logout, refetchUser: fetchUser };
 
     return (
         <AuthContext.Provider value={value}>

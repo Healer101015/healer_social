@@ -42,10 +42,16 @@ router.post("/:id/like", authRequired, async (req, res) => {
   const post = await Post.findById(req.params.id);
   if (!post) return res.status(404).json({ error: "Post not found" });
   const has = post.likes.some(id => id.toString() === req.userId);
-  if (has) post.likes = post.likes.filter(id => id.toString() !== req.userId);
-  else post.likes.push(req.userId);
+  if (has) {
+    post.likes = post.likes.filter(id => id.toString() !== req.userId);
+  } else {
+    post.likes.push(req.userId);
+  }
   await post.save();
-  res.json({ likes: post.likes.length });
+  const populatedPost = await Post.findById(post._id)
+    .populate("user", "name avatarUrl")
+    .populate("comments.user", "name avatarUrl");
+  res.json(populatedPost);
 });
 
 // Comment
@@ -55,8 +61,10 @@ router.post("/:id/comment", authRequired, async (req, res) => {
   const c = { user: req.userId, text: req.body.text };
   post.comments.push(c);
   await post.save();
-  const populated = await Post.findById(post._id).populate("comments.user", "name avatarUrl");
-  res.json(populated.comments[populated.comments.length - 1]);
+  const populated = await Post.findById(post._id)
+    .populate("user", "name avatarUrl")
+    .populate("comments.user", "name avatarUrl");
+  res.json(populated);
 });
 
 export default router;

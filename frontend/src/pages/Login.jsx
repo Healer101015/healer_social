@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { useAuth } from "../context/AuthContext"; // Importar o hook useAuth
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -8,6 +9,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth(); // Obter a função login do contexto
 
   async function submit(e) {
     e.preventDefault();
@@ -15,7 +17,8 @@ export default function Login() {
     setLoading(true);
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      localStorage.setItem("token", data.token);
+      // Usar a função login do contexto para atualizar o estado globalmente
+      login(data.user, data.token);
       navigate("/");
     } catch (e) {
       setError(e.response?.data?.error || "Erro ao entrar. Tente novamente.");
