@@ -5,10 +5,10 @@ import CreatePost from "../components/CreatePost.jsx";
 import PostCard from "../components/PostCard.jsx";
 import { api } from "../api";
 
-export default function Home(){
+export default function Home() {
   const [posts, setPosts] = useState([]);
 
-  async function load(){ const { data } = await api.get("/posts"); setPosts(data); }
+  async function load() { const { data } = await api.get("/posts"); setPosts(data); }
   useEffect(() => { load(); }, []);
 
   return (
