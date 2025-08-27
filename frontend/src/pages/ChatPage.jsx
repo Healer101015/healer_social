@@ -5,7 +5,7 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 
-// Remova a declaração global do socket e crie dentro do componente
+// Variável global para o socket
 let socket = null;
 
 export default function ChatPage() {
@@ -16,60 +16,75 @@ export default function ChatPage() {
     const [input, setInput] = useState('');
     const [recipient, setRecipient] = useState(null);
     const [socketConnected, setSocketConnected] = useState(false);
+    const [connectionError, setConnectionError] = useState('');
     const messagesEndRef = useRef(null);
 
+    const initializeSocket = () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error("[ChatPage] Token não encontrado");
+            navigate('/login');
+            return;
+        }
+
+        // Desconectar socket existente se houver
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+
+        // Use a URL correta da API
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        console.log("[ChatPage] Conectando ao Socket.io em:", API_URL);
+
+        socket = io(API_URL, {
+            query: { token },
+            autoConnect: true,
+            transports: ['websocket', 'polling'],
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            timeout: 5000
+        });
+
+        socket.on('connect', () => {
+            console.log("[ChatPage] Socket conectado com sucesso");
+            setSocketConnected(true);
+            setConnectionError('');
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log("[ChatPage] Socket desconectado:", reason);
+            setSocketConnected(false);
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error("[ChatPage] Erro de conexão:", error.message);
+            setSocketConnected(false);
+            setConnectionError(`Erro de conexão: ${error.message}. Verifique se o servidor está rodando.`);
+        });
+
+        socket.on('receiveMessage', (message) => {
+            console.log("[ChatPage] Nova mensagem recebida:", message);
+            setMessages(prev => [...prev, message]);
+        });
+
+        socket.on('messageSent', (officialMessage) => {
+            console.log("[ChatPage] Mensagem confirmada:", officialMessage);
+            setMessages(prev => prev.map(msg =>
+                msg.tempId && msg.tempId === officialMessage.tempId
+                    ? officialMessage
+                    : msg
+            ));
+        });
+
+        socket.on('messageError', (errorData) => {
+            console.error("[ChatPage] Erro ao enviar mensagem:", errorData);
+            setMessages(prev => prev.filter(msg => msg.tempId !== errorData.tempId));
+            alert('Erro ao enviar mensagem. Tente novamente.');
+        });
+    };
+
     useEffect(() => {
-        const initializeSocket = () => {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                console.error("[ChatPage] Token não encontrado");
-                navigate('/login');
-                return;
-            }
-
-            // Desconectar socket existente se houver
-            if (socket) {
-                socket.disconnect();
-            }
-
-            socket = io(import.meta.env.VITE_API_URL, {
-                query: { token },
-                autoConnect: true,
-            });
-
-            socket.on('connect', () => {
-                console.log("[ChatPage] Socket conectado");
-                setSocketConnected(true);
-            });
-
-            socket.on('disconnect', () => {
-                console.log("[ChatPage] Socket desconectado");
-                setSocketConnected(false);
-            });
-
-            socket.on('connect_error', (error) => {
-                console.error("[ChatPage] Erro de conexão:", error);
-                setSocketConnected(false);
-            });
-
-            // Mensagem recebida
-            socket.on('receiveMessage', (message) => {
-                console.log("[ChatPage] Nova mensagem recebida:", message);
-                setMessages(prev => [...prev, message]);
-            });
-
-            // Confirmação de mensagem enviada
-            socket.on('messageSent', (officialMessage) => {
-                console.log("[ChatPage] Mensagem confirmada:", officialMessage);
-                // Atualiza a mensagem temporária com a versão oficial do servidor
-                setMessages(prev => prev.map(msg =>
-                    msg.tempId && msg.tempId === officialMessage.tempId
-                        ? officialMessage
-                        : msg
-                ));
-            });
-        };
-
         const fetchRecipient = async () => {
             try {
                 const res = await api.get(`/users/${userId}`);
@@ -89,22 +104,25 @@ export default function ChatPage() {
             }
         };
 
+        console.log("[ChatPage] Inicializando socket...");
         initializeSocket();
         fetchRecipient();
         fetchMessages();
 
         return () => {
             if (socket) {
-                console.log("[ChatPage] Removendo listeners e desconectando socket");
-                socket.off('receiveMessage');
-                socket.off('messageSent');
+                console.log("[ChatPage] Limpando socket...");
                 socket.off('connect');
                 socket.off('disconnect');
                 socket.off('connect_error');
+                socket.off('receiveMessage');
+                socket.off('messageSent');
+                socket.off('messageError');
                 socket.disconnect();
+                socket = null;
             }
         };
-    }, [userId, me, navigate]);
+    }, [userId, navigate]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -114,7 +132,7 @@ export default function ChatPage() {
         e.preventDefault();
         if (input.trim() && socketConnected) {
             const tempMessage = {
-                _id: Date.now().toString(), // ID temporário
+                _id: Date.now().toString(),
                 tempId: Date.now().toString(),
                 sender: me._id,
                 recipient: userId,
@@ -123,21 +141,25 @@ export default function ChatPage() {
                 isSending: true
             };
 
-            // Adiciona mensagem temporária imediatamente
             setMessages(prev => [...prev, tempMessage]);
 
             console.log("[ChatPage] Emitindo 'sendMessage'");
             socket.emit('sendMessage', {
                 recipientId: userId,
                 content: input,
-                tempId: tempMessage.tempId // Envia ID temporário para correlação
+                tempId: tempMessage.tempId
             });
 
             setInput('');
         } else if (!socketConnected) {
-            alert("Conexão perdida. Reconectando...");
-            socket.connect();
+            setConnectionError('Conexão perdida. Tentando reconectar...');
+            initializeSocket();
         }
+    };
+
+    const retryConnection = () => {
+        setConnectionError('Reconectando...');
+        initializeSocket();
     };
 
     if (!recipient) {
@@ -164,6 +186,18 @@ export default function ChatPage() {
                     <h2 className="text-xl font-bold">{recipient.name}</h2>
                     <span className={`ml-2 w-3 h-3 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
                 </div>
+
+                {connectionError && (
+                    <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mt-4 flex justify-between items-center">
+                        <span>{connectionError}</span>
+                        <button
+                            onClick={retryConnection}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm"
+                        >
+                            Tentar Novamente
+                        </button>
+                    </div>
+                )}
 
                 <div className="flex-1 bg-white p-4 overflow-y-auto space-y-4 rounded-b-lg shadow-md max-h-96">
                     {messages.length === 0 ? (
@@ -210,12 +244,6 @@ export default function ChatPage() {
                         {socketConnected ? 'Enviar' : 'Conectando...'}
                     </button>
                 </form>
-
-                {!socketConnected && (
-                    <div className="text-red-500 text-sm mt-2">
-                        Conexão perdida. Tentando reconectar...
-                    </div>
-                )}
             </div>
         </div>
     );
