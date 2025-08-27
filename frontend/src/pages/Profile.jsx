@@ -147,6 +147,25 @@ const FriendshipActions = ({ user, status, setStatus }) => {
   );
 };
 
+const FriendsList = ({ friends }) => (
+  <div className="card p-4">
+    <h3 className="font-semibold text-gray-900 mb-4">Amigos ({friends?.length || 0})</h3>
+    {friends && friends.length > 0 ? (
+      <div className="grid grid-cols-3 gap-2">
+        {friends.map(friend => (
+          <Link to={`/profile/${friend._id}`} key={friend._id} className="flex flex-col items-center text-center">
+            <img src={getImageUrl(friend.avatarUrl, friend.name)} alt={friend.name} className="w-20 h-20 rounded-lg object-cover mb-1" />
+            <span className="text-xs font-medium text-gray-700">{friend.name}</span>
+          </Link>
+        ))}
+      </div>
+    ) : (
+      <p className="text-sm text-gray-500">Nenhum amigo para mostrar.</p>
+    )}
+  </div>
+);
+
+
 // --- Componente Principal ---
 export default function Profile() {
   const { id } = useParams();
@@ -226,10 +245,7 @@ export default function Profile() {
 
           <aside className="hidden lg:block col-span-4">
             <div className="sticky top-24 space-y-6">
-              <div className="card p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Amigos ({user.friends?.length || 0})</h3>
-                <p className="text-sm text-gray-500">Funcionalidade em breve.</p>
-              </div>
+              <FriendsList friends={user.friends} />
             </div>
           </aside>
         </div>

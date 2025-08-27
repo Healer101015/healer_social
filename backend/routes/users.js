@@ -79,8 +79,20 @@ router.get("/:id", authRequired, async (req, res) => {
     await User.findByIdAndUpdate(req.params.id, { $inc: { profileViews: 1 } });
   }
 
-  const user = await User.findById(req.params.id).select("-password");
+  const user = await User.findById(req.params.id).select("-password").populate("friends", "name avatarUrl").lean();
   if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+
+  const me = await User.findById(req.userId);
+
+  let friendStatus = 'idle';
+  if (me.friends.map(f => f.toString()).includes(user._id.toString())) {
+    friendStatus = 'friends';
+  } else if (me.friendRequests.map(f => f.toString()).includes(user._id.toString())) {
+    friendStatus = 'request_received';
+  } else if (user.friendRequests.map(f => f.toString()).includes(me._id.toString())) {
+    friendStatus = 'request_sent';
+  }
+
   const posts = await Post.find({ user: user._id })
     .populate('repostOf') // Popular os dados do post original, se for partilha
     .populate({
@@ -89,7 +101,7 @@ router.get("/:id", authRequired, async (req, res) => {
     })
     .sort({ createdAt: -1 });
 
-  res.json({ user, posts });
+  res.json({ user, posts, friendStatus });
 });
 
 export default router;
