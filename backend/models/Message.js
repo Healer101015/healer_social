@@ -1,12 +1,43 @@
-// backend/models/Message.js
 import mongoose from "mongoose";
 
-// O modelo da mensagem define como os dados são armazenados no MongoDB
 const MessageSchema = new mongoose.Schema({
-    sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    recipient: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    content: { type: String, required: true },
-}, { timestamps: true });
+    sender: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+    },
+    recipient: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+    },
+    content: {
+        type: String,
+        default: ""
+    },
+    attachment: {
+        type: String, // URL ou base64 da mídia
+        default: null
+    },
+    attachmentType: {
+        type: String, // 'image', 'video', 'audio'
+        default: null
+    },
+    mimeType: {
+        type: String, // Tipo MIME do arquivo (ex: image/jpeg, video/mp4)
+        default: null
+    },
+    fileName: {
+        type: String, // Nome original do arquivo
+        default: null
+    },
+    fileSize: {
+        type: Number, // Tamanho do arquivo em bytes
+        default: null
+    }
+}, {
+    timestamps: true
+});
 
 // Cria índices para otimizar a busca por mensagens entre dois usuários
 MessageSchema.index({ sender: 1, recipient: 1 });

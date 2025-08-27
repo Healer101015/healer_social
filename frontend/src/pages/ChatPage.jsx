@@ -17,6 +17,10 @@ export default function ChatPage() {
     const [recipient, setRecipient] = useState(null);
     const [socketConnected, setSocketConnected] = useState(false);
     const [connectionError, setConnectionError] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+    const [attachment, setAttachment] = useState(null);
+    const [attachmentType, setAttachmentType] = useState(null);
+    const fileInputRef = useRef(null);
     const messagesEndRef = useRef(null);
 
     const initializeSocket = () => {
@@ -130,13 +134,17 @@ export default function ChatPage() {
 
     const handleSendMessage = (e) => {
         e.preventDefault();
-        if (input.trim() && socketConnected) {
+
+        if ((input.trim() || attachment) && socketConnected) {
+            const tempId = Date.now().toString();
             const tempMessage = {
-                _id: Date.now().toString(),
-                tempId: Date.now().toString(),
+                _id: tempId,
+                tempId: tempId,
                 sender: me._id,
                 recipient: userId,
                 content: input,
+                attachment: attachment,
+                attachmentType: attachmentType,
                 createdAt: new Date(),
                 isSending: true
             };
@@ -147,19 +155,144 @@ export default function ChatPage() {
             socket.emit('sendMessage', {
                 recipientId: userId,
                 content: input,
-                tempId: tempMessage.tempId
+                tempId: tempMessage.tempId,
+                attachment: attachment,
+                attachmentType: attachmentType
             });
 
             setInput('');
+            setAttachment(null);
+            setAttachmentType(null);
         } else if (!socketConnected) {
             setConnectionError('Conexão perdida. Tentando reconectar...');
             initializeSocket();
         }
     };
 
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setIsUploading(true);
+
+        // Verificar o tipo de arquivo
+        const fileType = file.type.split('/')[0];
+        const validTypes = ['image', 'video', 'audio'];
+
+        if (!validTypes.includes(fileType)) {
+            alert('Tipo de arquivo não suportado. Use imagem, vídeo ou áudio.');
+            setIsUploading(false);
+            return;
+        }
+
+        // Converter para base64
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setAttachment(event.target.result);
+            setAttachmentType(fileType);
+            setIsUploading(false);
+        };
+        reader.onerror = () => {
+            alert('Erro ao carregar o arquivo.');
+            setIsUploading(false);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeAttachment = () => {
+        setAttachment(null);
+        setAttachmentType(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     const retryConnection = () => {
         setConnectionError('Reconectando...');
         initializeSocket();
+    };
+
+    const renderAttachmentPreview = () => {
+        if (!attachment) return null;
+
+        switch (attachmentType) {
+            case 'image':
+                return (
+                    <div className="relative mt-2">
+                        <img
+                            src={attachment}
+                            alt="Preview"
+                            className="w-32 h-32 object-cover rounded-lg"
+                        />
+                        <button
+                            onClick={removeAttachment}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                        >
+                            ×
+                        </button>
+                    </div>
+                );
+            case 'video':
+                return (
+                    <div className="relative mt-2">
+                        <video
+                            src={attachment}
+                            controls
+                            className="w-48 h-32 object-cover rounded-lg"
+                        />
+                        <button
+                            onClick={removeAttachment}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                        >
+                            ×
+                        </button>
+                    </div>
+                );
+            case 'audio':
+                return (
+                    <div className="relative mt-2 bg-gray-100 p-2 rounded-lg">
+                        <audio
+                            src={attachment}
+                            controls
+                            className="w-full"
+                        />
+                        <button
+                            onClick={removeAttachment}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                        >
+                            ×
+                        </button>
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
+    const renderMessageContent = (msg) => {
+        if (msg.attachment) {
+            switch (msg.attachmentType) {
+                case 'image':
+                    return <img src={msg.attachment} alt="Imagem" className="max-w-xs rounded-lg" />;
+                case 'video':
+                    return (
+                        <video controls className="max-w-xs rounded-lg">
+                            <source src={msg.attachment} type="video/mp4" />
+                            Seu navegador não suporta o elemento de vídeo.
+                        </video>
+                    );
+                case 'audio':
+                    return (
+                        <audio controls className="w-full">
+                            <source src={msg.attachment} type="audio/mpeg" />
+                            Seu navegador não suporta o elemento de áudio.
+                        </audio>
+                    );
+                default:
+                    return null;
+            }
+        }
+        return <p>{msg.content}</p>;
     };
 
     if (!recipient) {
@@ -216,7 +349,7 @@ export default function ChatPage() {
                                         : 'bg-gray-200 text-gray-800 rounded-bl-none'
                                         } ${msg.isSending ? 'opacity-70' : ''}`}
                                 >
-                                    {msg.content}
+                                    {renderMessageContent(msg)}
                                     {msg.isSending && (
                                         <span className="ml-2 text-xs">Enviando...</span>
                                     )}
@@ -227,23 +360,45 @@ export default function ChatPage() {
                     <div ref={messagesEndRef} />
                 </div>
 
-                <form onSubmit={handleSendMessage} className="bg-white p-4 mt-4 flex rounded-lg shadow-md">
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Digite sua mensagem..."
-                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={!socketConnected}
-                    />
-                    <button
-                        type="submit"
-                        className="ml-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition disabled:bg-gray-400"
-                        disabled={!input.trim() || !socketConnected}
-                    >
-                        {socketConnected ? 'Enviar' : 'Conectando...'}
-                    </button>
-                </form>
+                <div className="bg-white p-4 mt-4 rounded-lg shadow-md">
+                    {attachment && renderAttachmentPreview()}
+
+                    <form onSubmit={handleSendMessage} className="flex mt-2">
+                        <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Digite sua mensagem..."
+                            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            disabled={!socketConnected || isUploading}
+                        />
+
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileSelect}
+                            accept="image/*,video/*,audio/*"
+                            className="hidden"
+                            id="file-input"
+                            disabled={!socketConnected || isUploading}
+                        />
+
+                        <label
+                            htmlFor="file-input"
+                            className="ml-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition disabled:bg-gray-400 cursor-pointer flex items-center"
+                        >
+                            {isUploading ? '⏳' : '📎'}
+                        </label>
+
+                        <button
+                            type="submit"
+                            className="ml-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition disabled:bg-gray-400"
+                            disabled={(!input.trim() && !attachment) || !socketConnected || isUploading}
+                        >
+                            {socketConnected ? 'Enviar' : 'Conectando...'}
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     );

@@ -8,6 +8,7 @@ import { api } from "../api";
 import { format, parseISO, isValid as isValidDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useChat } from "../context/ChatContext.jsx";
 
 /** =========================
  * Hooks e Helpers
@@ -168,7 +169,7 @@ const ProfileSidebar = ({
   setFriendStatus,
   karma,
 }) => {
-  const navigate = useNavigate();
+  const { openChat } = useChat();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddFriend = useCallback(async () => {
@@ -209,7 +210,7 @@ const ProfileSidebar = ({
       <div className="w-full flex justify-center gap-2 mt-4">
         {!isMyProfile && (
           <button
-            onClick={() => navigate(`/chat/${user._id}`)}
+            onClick={() => openChat(user)}
             className="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <svg
