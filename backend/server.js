@@ -48,50 +48,102 @@ app.use("/api/messages", messagesRoutes);
 const activeUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log(`Usuário conectado: ${socket.id}`);
+  console.log(`[Socket.io] Conexão recebida. Socket ID: ${socket.id}`);
 
   const token = socket.handshake.query.token;
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decoded.id;
-      activeUsers.set(userId, socket.id);
-    } catch (e) {
-      socket.disconnect();
-    }
+  if (!token) {
+    console.log(`[Socket.io] Erro: Token de autenticação não fornecido. Desconectando socket ${socket.id}.`);
+    socket.disconnect();
+    return;
   }
 
-  socket.on("sendMessage", async ({ recipientId, content }) => {
-    try {
-      const senderId = [...activeUsers.entries()].find(([id, socketId]) => socketId === socket.id)?.[0];
-      if (!senderId || !content.trim()) return;
+  let userId;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev_secret");
+    userId = decoded.id;
+    activeUsers.set(userId, socket.id);
+    console.log(`[Socket.io] Token verificado. Usuário ID: ${userId} associado ao socket ID: ${socket.id}. Conexão bem-sucedida.`);
+    console.log(`[Socket.io] Usuários ativos: ${Array.from(activeUsers.entries()).map(([id, socketId]) => `${id}:${socketId}`).join(', ')}`);
+  } catch (e) {
+    console.error(`[Socket.io] Erro de verificação do token para o socket ${socket.id}:`, e.message);
+    socket.disconnect();
+    return;
+  }
 
-      const newMessage = await Message.create({ sender: senderId, recipient: recipientId, content });
+  socket.on("sendMessage", async ({ recipientId, content, tempId }) => {
+    console.log(`[Socket.io] 'sendMessage' de ${userId} para ${recipientId} -> "${content}"`);
+    try {
+      if (!userId || !content.trim()) {
+        console.log("[Socket.io] Erro: remetente inválido ou conteúdo vazio.");
+        return;
+      }
+
+      const newMessage = await Message.create({
+        sender: userId,
+        recipient: recipientId,
+        content
+      });
+
+      // Adiciona o tempId se foi fornecido
+      const messageWithTempId = newMessage.toObject();
+      if (tempId) {
+        messageWithTempId.tempId = tempId;
+      }
+
+      console.log(`[Socket.io] Mensagem salva. ID: ${newMessage._id}, TempID: ${tempId || 'N/A'}`);
 
       const recipientSocketId = activeUsers.get(recipientId);
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit("receiveMessage", newMessage);
+        io.to(recipientSocketId).emit("receiveMessage", messageWithTempId);
+        console.log(`[Socket.io] Mensagem enviada em tempo real para destinatário ${recipientId} (Socket: ${recipientSocketId}).`);
+      } else {
+        console.log(`[Socket.io] Destinatário ${recipientId} não está conectado.`);
       }
 
-      socket.emit("messageSent", newMessage);
+      // sempre confirma para o remetente
+      socket.emit("messageSent", messageWithTempId);
+      console.log(`[Socket.io] Confirmação enviada para remetente ${userId}.`);
 
     } catch (e) {
-      console.error("Erro ao enviar mensagem:", e.message);
+      console.error("[Socket.io] Erro ao enviar mensagem:", e.message);
+      // Envia erro para o cliente
+      socket.emit("messageError", {
+        error: "Failed to send message",
+        tempId: tempId
+      });
     }
   });
 
-  socket.on("disconnect", () => {
-    console.log("Usuário desconectado", socket.id);
-    for (const [userId, socketId] of activeUsers.entries()) {
-      if (socketId === socket.id) {
-        activeUsers.delete(userId);
-        break;
-      }
+  socket.on("disconnect", (reason) => {
+    console.log(`[Socket.io] Usuário desconectado. Socket ID: ${socket.id}. Razão: ${reason}`);
+    if (userId) {
+      activeUsers.delete(userId);
+      console.log(`[Socket.io] Usuário ID: ${userId} removido dos usuários ativos.`);
+      console.log(`[Socket.io] Usuários ativos restantes: ${Array.from(activeUsers.entries()).map(([id, socketId]) => `${id}:${socketId}`).join(', ')}`);
     }
+  });
+
+  // Evento para verificar status da conexão
+  socket.on("ping", (callback) => {
+    if (callback) callback("pong");
   });
 });
 
-app.get("/", (_req, res) => res.json({ ok: true, name: "Healer API" }));
+// Rota de health check
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    activeUsers: Array.from(activeUsers.entries()).map(([id, socketId]) => ({ userId: id, socketId })),
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/", (_req, res) => res.json({
+  ok: true,
+  name: "Healer API",
+  version: "1.0.0",
+  socketIo: true
+}));
 
 mongoose.connect(MONGO_URI).then(() => {
   console.log("MongoDB connected");

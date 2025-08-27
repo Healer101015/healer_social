@@ -1,32 +1,12 @@
+// backend/routes/messages.js
 import express from "express";
 import Message from "../models/Message.js";
-import { authRequired } from "./auth.js";
+import { authRequired } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.post("/", authRequired, async (req, res) => {
-    try {
-        const { recipientId, content } = req.body;
-        const senderId = req.userId;
-
-        if (!recipientId || !content) {
-            return res.status(400).json({ error: "Recipient ID and content are required." });
-        }
-
-        const newMessage = new Message({
-            sender: senderId,
-            recipient: recipientId,
-            content: content,
-        });
-
-        await newMessage.save();
-
-        res.status(201).json(newMessage);
-    } catch (e) {
-        res.status(500).json({ error: "Failed to send message." });
-    }
-});
-
+// Rota para buscar o histórico de mensagens entre dois usuários
+// Esta rota é uma API REST e é usada quando a página de chat é carregada
 router.get("/:recipientId", authRequired, async (req, res) => {
     try {
         const recipientId = req.params.recipientId;
@@ -46,3 +26,5 @@ router.get("/:recipientId", authRequired, async (req, res) => {
 });
 
 export default router;
+
+
