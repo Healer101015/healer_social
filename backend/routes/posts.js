@@ -20,6 +20,15 @@ router.get("/", authRequired, async (req, res) => {
   const posts = await Post.find()
     .populate("user", "name avatarUrl")
     .populate("comments.user", "name avatarUrl")
+    .populate("reactions.user", "name avatarUrl") // Popular utilizadores que reagiram
+    .populate({ // Popular dados de posts partilhados
+      path: 'repostOf',
+      populate: [
+        { path: 'user', select: 'name avatarUrl' },
+        { path: 'reactions.user', select: 'name avatarUrl' },
+        { path: 'comments.user', select: 'name avatarUrl' }
+      ]
+    })
     .sort({ createdAt: -1 })
     .limit(100);
   res.json(posts);
@@ -37,22 +46,84 @@ router.post("/", authRequired, upload.single("media"), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Like / unlike
-router.post("/:id/like", authRequired, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post not found" });
-  const has = post.likes.some(id => id.toString() === req.userId);
-  if (has) {
-    post.likes = post.likes.filter(id => id.toString() !== req.userId);
-  } else {
-    post.likes.push(req.userId);
+// NOVO: Editar post
+router.put("/:id", authRequired, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+    if (post.user.toString() !== req.userId) return res.status(403).json({ error: "Não autorizado" });
+
+    post.text = req.body.text || post.text;
+    post.isEdited = true;
+    await post.save();
+
+    const populatedPost = await Post.findById(post._id)
+      .populate("user", "name avatarUrl")
+      .populate("comments.user", "name avatarUrl")
+      .populate("reactions.user", "name avatarUrl");
+    res.json(populatedPost);
+  } catch (e) {
+    res.status(500).json({ error: "Falha ao editar o post." });
   }
+});
+
+
+// ALTERADO: Reagir a um post (antes era /like)
+router.post("/:id/react", authRequired, async (req, res) => {
+  const { reactionType } = req.body;
+  if (!['like', 'love', 'haha', 'sad'].includes(reactionType)) {
+    return res.status(400).json({ error: "Tipo de reação inválida" });
+  }
+
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+  const existingReactionIndex = post.reactions.findIndex(r => r.user.toString() === req.userId);
+
+  if (existingReactionIndex > -1) {
+    // Se a reação for a mesma, remove (unlike)
+    if (post.reactions[existingReactionIndex].type === reactionType) {
+      post.reactions.splice(existingReactionIndex, 1);
+    } else { // Se for diferente, atualiza
+      post.reactions[existingReactionIndex].type = reactionType;
+    }
+  } else { // Se não houver reação, adiciona
+    post.reactions.push({ user: req.userId, type: reactionType });
+  }
+
   await post.save();
   const populatedPost = await Post.findById(post._id)
     .populate("user", "name avatarUrl")
-    .populate("comments.user", "name avatarUrl");
+    .populate("comments.user", "name avatarUrl")
+    .populate("reactions.user", "name avatarUrl");
   res.json(populatedPost);
 });
+
+// NOVO: Partilhar um post
+router.post("/:id/share", authRequired, async (req, res) => {
+  try {
+    const originalPost = await Post.findById(req.params.id);
+    if (!originalPost) return res.status(404).json({ error: "Post original não encontrado" });
+
+    const sharePost = await Post.create({
+      user: req.userId,
+      text: req.body.text || "", // O utilizador pode adicionar um comentário à partilha
+      repostOf: originalPost._id,
+    });
+
+    const populatedShare = await sharePost.populate([
+      { path: 'user', select: 'name avatarUrl' },
+      {
+        path: 'repostOf',
+        populate: { path: 'user', select: 'name avatarUrl' }
+      }
+    ]);
+    res.status(201).json(populatedShare);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // Comment
 router.post("/:id/comment", authRequired, async (req, res) => {
@@ -63,7 +134,8 @@ router.post("/:id/comment", authRequired, async (req, res) => {
   await post.save();
   const populated = await Post.findById(post._id)
     .populate("user", "name avatarUrl")
-    .populate("comments.user", "name avatarUrl");
+    .populate("comments.user", "name avatarUrl")
+    .populate("reactions.user", "name avatarUrl");
   res.json(populated);
 });
 
