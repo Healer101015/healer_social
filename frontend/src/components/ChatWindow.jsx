@@ -17,26 +17,38 @@ const ChatWindow = ({ recipient }) => {
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
 
-    // Define a URL base da API uma vez para reutilização
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
+        // Fechar conexão anterior se existir
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+
         // Configurar socket.io com reconexão
         socket = io(API_URL, {
-            query: { token },
+            auth: { token },
             transports: ['websocket', 'polling'],
             reconnection: true,
-            reconnectionAttempts: 5,
+            reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
-            timeout: 10000
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            forceNew: true
         });
 
         socket.on('connect', () => {
             console.log('Socket conectado');
             setSocketConnected(true);
+
+            // Entrar na sala do usuário após conectar
+            if (me?._id) {
+                socket.emit('join', { userId: me._id });
+            }
         });
 
         socket.on('disconnect', (reason) => {
@@ -49,15 +61,30 @@ const ChatWindow = ({ recipient }) => {
             setSocketConnected(false);
         });
 
+        // Evento principal para receber mensagens
         socket.on('receiveMessage', (message) => {
-            if (message.sender === recipient._id || message.sender === me._id) {
-                setMessages(prev => [...prev, message]);
+            console.log('Mensagem recebida:', message);
+            if (message.sender === recipient._id || message.sender._id === recipient._id) {
+                setMessages(prev => {
+                    // Evitar duplicatas
+                    const messageExists = prev.some(msg =>
+                        msg._id === message._id || msg.tempId === message.tempId
+                    );
+                    if (!messageExists) {
+                        return [...prev, message];
+                    }
+                    return prev;
+                });
             }
         });
 
+        // Confirmação de mensagem enviada
         socket.on('messageSent', (officialMessage) => {
+            console.log('Mensagem confirmada:', officialMessage);
             setMessages(prev => prev.map(msg =>
-                msg.tempId && msg.tempId === officialMessage.tempId ? officialMessage : msg
+                msg.tempId && msg.tempId === officialMessage.tempId
+                    ? { ...officialMessage, isSending: false }
+                    : msg
             ));
         });
 
@@ -91,9 +118,10 @@ const ChatWindow = ({ recipient }) => {
                 socket = null;
             }
         };
-    }, [recipient._id, me._id, API_URL]);
+    }, [recipient._id, me?._id, API_URL]);
 
     useEffect(() => {
+        // Scroll para baixo quando novas mensagens chegarem
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
@@ -104,18 +132,21 @@ const ChatWindow = ({ recipient }) => {
             const tempMessage = {
                 _id: tempId,
                 tempId,
-                sender: me._id,
-                recipient: recipient._id,
+                sender: me,
+                recipient: recipient,
                 content: input,
                 createdAt: new Date(),
                 isSending: true
             };
+
             setMessages(prev => [...prev, tempMessage]);
+
             socket.emit('sendMessage', {
                 recipientId: recipient._id,
                 content: input,
                 tempId,
             });
+
             setInput('');
         }
     };
@@ -124,14 +155,12 @@ const ChatWindow = ({ recipient }) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Verificar tipo de arquivo
         const fileType = file.type.split('/')[0];
         if (!['image', 'video', 'audio'].includes(fileType)) {
             alert('Tipo de arquivo não suportado. Use imagem, vídeo ou áudio.');
             return;
         }
 
-        // Verificar tamanho do arquivo (10MB)
         if (file.size > 10 * 1024 * 1024) {
             alert('Arquivo muito grande. O tamanho máximo é 10MB.');
             return;
@@ -143,7 +172,6 @@ const ChatWindow = ({ recipient }) => {
             const formData = new FormData();
             formData.append('media', file);
 
-            // CORREÇÃO: Usar a rota correta sem duplicar /api
             const response = await api.post('/upload-media', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
@@ -154,8 +182,8 @@ const ChatWindow = ({ recipient }) => {
             const tempMessage = {
                 _id: tempId,
                 tempId,
-                sender: me._id,
-                recipient: recipient._id,
+                sender: me,
+                recipient: recipient,
                 content: input.trim(),
                 attachment: fileUrl,
                 attachmentType,
@@ -207,6 +235,9 @@ const ChatWindow = ({ recipient }) => {
                             src={`${API_URL}${msg.attachment}`}
                             alt="Imagem"
                             className="rounded-lg max-w-full h-auto max-h-64 object-cover"
+                            onError={(e) => {
+                                e.target.style.display = 'none';
+                            }}
                         />
                     </div>
                 );
@@ -217,6 +248,9 @@ const ChatWindow = ({ recipient }) => {
                             src={`${API_URL}${msg.attachment}`}
                             controls
                             className="rounded-lg max-w-full h-auto max-h-64"
+                            onError={(e) => {
+                                e.target.style.display = 'none';
+                            }}
                         >
                             Seu navegador não suporta o elemento de vídeo.
                         </video>
@@ -251,6 +285,19 @@ const ChatWindow = ({ recipient }) => {
         if (socket) {
             socket.connect();
         }
+    };
+
+    // Função para verificar se a mensagem é do remetente atual
+    const isMyMessage = (message) => {
+        return message.sender?._id === me._id || message.sender === me._id;
+    };
+
+    // Formatar data da mensagem
+    const formatTime = (dateString) => {
+        return new Date(dateString).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 
     return (
@@ -297,10 +344,10 @@ const ChatWindow = ({ recipient }) => {
                     messages.map(msg => (
                         <div
                             key={msg._id || msg.tempId}
-                            className={`flex ${msg.sender === me._id ? 'justify-end' : 'justify-start'} mb-3`}
+                            className={`flex ${isMyMessage(msg) ? 'justify-end' : 'justify-start'} mb-3`}
                         >
                             <div
-                                className={`p-3 rounded-lg max-w-[80%] break-words ${msg.sender === me._id
+                                className={`p-3 rounded-lg max-w-[80%] break-words ${isMyMessage(msg)
                                     ? 'bg-blue-500 text-white rounded-br-none'
                                     : 'bg-gray-200 text-gray-800 rounded-bl-none'
                                     } ${msg.isSending ? 'opacity-70' : ''}`}
@@ -313,7 +360,7 @@ const ChatWindow = ({ recipient }) => {
                                     </div>
                                 )}
                                 <div className="text-xs mt-1 opacity-70">
-                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {formatTime(msg.createdAt)}
                                 </div>
                             </div>
                         </div>
