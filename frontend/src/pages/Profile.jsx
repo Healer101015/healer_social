@@ -1,14 +1,18 @@
+// frontend/src/pages/Profile.jsx
+
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
 import PostCard from "../components/PostCard.jsx";
 import { api } from "../api";
 import { format, parseISO, isValid as isValidDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useAuth } from "../context/AuthContext.jsx";
 
 /** =========================
- * Helpers
+ * Hooks e Helpers
  * ========================= */
+
 const getApiBase = () => import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getImageUrl = (path) => (path ? `${getApiBase()}${path}` : null);
 
@@ -35,264 +39,128 @@ const copyToClipboard = async (text) => {
     const ok = document.execCommand("copy");
     document.body.removeChild(textarea);
     return ok;
-  } catch {
+  } catch (_) {
     return false;
   }
 };
 
-/** =========================
- * Ícones SVG
- * ========================= */
-const CakeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-    viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    className="inline-block mr-2 text-gray-500">
-    <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8" />
-    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H4Z" />
-    <path d="M16 11V7a4 4 0 0 0-8 0v4" />
-  </svg>
-);
-
-const KarmaIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-    viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    className="inline-block mr-2 text-gray-500">
-    <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-  </svg>
-);
-
-const ShareIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-    viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    className="w-4 h-4 mr-2">
-    <circle cx="18" cy="5" r="3" />
-    <circle cx="6" cy="12" r="3" />
-    <circle cx="18" cy="19" r="3" />
-    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-  </svg>
-);
-
-/** =========================
- * Avatar genérico
- * ========================= */
-const GenericAvatar = ({ user, className }) => {
-  const name = user?.name || "";
-  const id = user?._id || name || "0";
-
-  const getInitials = (n) => {
-    if (!n) return "?";
-    const parts = n.trim().split(" ").filter(Boolean);
-    if (parts.length > 1) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    return n.substring(0, 2).toUpperCase();
-  };
-
-  const hash = (str) => {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) {
-      h = ((h << 5) - h) + str.charCodeAt(i);
-      h |= 0;
-    }
-    return h;
-  };
-
-  const colors = ["#f87171", "#fb923c", "#fbbf24", "#a3e635", "#4ade80", "#34d399", "#2dd4bf", "#22d3ee", "#38bdf8", "#60a5fa", "#818cf8", "#a78bfa", "#c084fc", "#e879f9", "#f472b6"];
-  const bgColor = colors[Math.abs(hash(String(id))) % colors.length];
-
-  return (
-    <div
-      className={`flex items-center justify-center rounded-full text-white font-bold ${className}`}
-      style={{ backgroundColor: bgColor }}
-      aria-label={`Avatar de ${name || "usuário"}`}
-    >
-      <span>{getInitials(name)}</span>
-    </div>
-  );
-};
-
-/** =========================
- * Hook de perfil
- * ========================= */
 const useUserProfile = (userId) => {
-  const [state, setState] = useState({
-    user: null,
-    posts: [],
-    loading: true,
-    error: null,
-    friendStatus: "idle", // idle | friends | request_sent | request_received
-  });
-  const [me, setMe] = useState(null);
+  const [user, setUser] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [friendStatus, setFriendStatus] = useState("idle");
+  const [karma, setKarma] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isMyProfile, setIsMyProfile] = useState(false);
+  const { user: me } = useAuth();
+  const navigate = useNavigate();
 
-  const load = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const [{ data: userData }, { data: meData }] = await Promise.all([
-        api.get(`/users/${userId}`), // deve retornar { user, posts }
-        api.get("/users/me"),
+      if (!userId) {
+        setLoading(false);
+        setError("Usuário não encontrado.");
+        return;
+      }
+      const [profileResponse, meResponse] = await Promise.all([
+        api.get(`/users/${userId}`),
+        me ? api.get("/users/me") : Promise.resolve(null),
       ]);
+      const profileUser = profileResponse.data.user;
+      const meData = meResponse?.data;
+      setUser(profileUser);
+      setPosts(profileResponse.data.posts);
 
-      const profileUser = userData?.user || null;
-      const profilePosts = userData?.posts || [];
-
-      let friendStatus = "idle";
-      if (meData?.friends?.includes(userId)) {
-        friendStatus = "friends";
-      } else if (profileUser?.friendRequests?.includes?.(meData?._id)) {
-        // Eu enviei um pedido para a pessoa (aparece na lista de pedidos da pessoa)
-        friendStatus = "request_sent";
-      } else if (meData?.friendRequests?.includes?.(userId)) {
-        // A pessoa enviou um pedido para mim (aparece na minha lista)
-        friendStatus = "request_received";
+      if (profileUser._id === me?._id) {
+        setIsMyProfile(true);
+      } else {
+        setIsMyProfile(false);
+        if (meData?.friends?.includes(userId)) {
+          setFriendStatus("friends");
+        } else if (profileUser?.friendRequests?.includes?.(meData?._id)) {
+          setFriendStatus("request_sent");
+        } else if (meData?.friendRequests?.includes?.(userId)) {
+          setFriendStatus("request_received");
+        } else {
+          setFriendStatus("idle");
+        }
       }
 
-      setState({
-        user: profileUser,
-        posts: profilePosts,
-        loading: false,
-        error: null,
-        friendStatus,
-      });
-      setMe(meData || null);
-    } catch (err) {
-      setState({
-        user: null,
-        posts: [],
-        loading: false,
-        error: "Falha ao carregar o perfil. Tente novamente.",
-        friendStatus: "idle",
-      });
+      const totalKarma = profileUser.friends.length + profileUser.friendRequests.length;
+      setKarma(totalKarma);
+    } catch (e) {
+      if (e.response?.status === 404) {
+        setError("Usuário não encontrado.");
+      } else {
+        setError("Não foi possível carregar o perfil.");
+      }
+    } finally {
+      setLoading(false);
     }
-  }, [userId]);
+  }, [userId, me, navigate]);
 
+  // Hook para buscar os dados do usuário e posts
   useEffect(() => {
-    load();
-  }, [load]);
+    refetch();
+  }, [userId, refetch]);
 
-  const isMyProfile = !!(me && state.user && me._id === state.user._id);
-
-  const setFriendStatus = useCallback((status) => {
-    setState((s) => ({ ...s, friendStatus: status }));
-  }, []);
+  // Hook separado para atualizar o título da página quando o usuário carregar
+  useEffect(() => {
+    if (user) {
+      document.title = user.name + " - Healer";
+    }
+  }, [user]);
 
   return {
-    ...state,
-    me,
-    isMyProfile,
-    refetch: load,
+    user,
+    posts,
+    friendStatus,
     setFriendStatus,
+    karma,
+    loading,
+    error,
+    isMyProfile,
+    refetch,
   };
 };
 
 /** =========================
- * UI: Header
+ * Componentes Menores
  * ========================= */
-const ProfileHeader = ({ user }) => {
-  const avatarSrc = getImageUrl(user?.avatarUrl);
 
-  return (
-    <div className="card p-4 mb-4">
-      <div className="flex items-center gap-4">
-        {avatarSrc ? (
-          <img
-            src={avatarSrc}
-            className="w-20 h-20 rounded-full border-2 border-gray-200 object-cover"
-            alt={`Avatar de ${user?.name || "usuário"}`}
-          />
-        ) : (
-          <GenericAvatar user={user} className="w-20 h-20 text-3xl" />
-        )}
-        <div>
-          <h1 className="text-2xl font-bold">{user?.name || "Utilizador"}</h1>
-          <p className="text-gray-600">
-            {user?.bio || "Este utilizador ainda não adicionou uma bio."}
-          </p>
-        </div>
-      </div>
+const ProfileHeader = ({ user }) => (
+  <div className="card p-6 flex flex-col md:flex-row items-center gap-6">
+    <div className="flex-shrink-0">
+      <img
+        src={getImageUrl(user.avatarUrl)}
+        alt={`${user.name}'s avatar`}
+        className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md"
+      />
     </div>
-  );
-};
+    <div className="flex-1 text-center md:text-left">
+      <h2 className="text-3xl font-bold text-gray-800">{user.name}</h2>
+      <p className="text-gray-500 mt-1">{user.bio || "Sem biografia."}</p>
+    </div>
+  </div>
+);
 
-/** =========================
- * UI: Botões de ação
- * ========================= */
-const ActionButton = ({
-  isMyProfile,
-  friendStatus,
-  onAddFriend,
-  onAcceptFriend,
-  onDeclineRequest,
-  onEditProfile,
-  loadingKey, // "add" | "accept" | "decline" | null
-}) => {
-  if (isMyProfile) {
-    return (
-      <button
-        onClick={onEditProfile}
-        className="w-full bg-gray-200 text-gray-800 rounded px-3 py-2 mt-4 hover:bg-gray-300 transition-colors"
-      >
-        Editar Perfil
-      </button>
-    );
-  }
+const PostFilters = ({ sortType, setSortType }) => (
+  <div className="flex justify-between items-center mb-4">
+    <h3 className="text-xl font-semibold text-gray-800">Publicações</h3>
+    <select
+      value={sortType}
+      onChange={(e) => setSortType(e.target.value)}
+      className="border border-gray-300 rounded-lg py-1 px-2 text-sm"
+    >
+      <option value="newest">Mais Recentes</option>
+      <option value="oldest">Mais Antigos</option>
+      <option value="most_liked">Mais Curtidos</option>
+    </select>
+  </div>
+);
 
-  switch (friendStatus) {
-    case "friends":
-      return (
-        <button
-          className="w-full bg-green-500 text-white rounded px-3 py-2 mt-4 cursor-default"
-          aria-disabled
-        >
-          ✓ Amigos
-        </button>
-      );
-    case "request_sent":
-      return (
-        <button
-          className="w-full bg-gray-400 text-white rounded px-3 py-2 mt-4 cursor-default"
-          aria-disabled
-        >
-          Pedido Enviado
-        </button>
-      );
-    case "request_received":
-      return (
-        <div className="flex flex-col gap-2 mt-4">
-          <button
-            onClick={onAcceptFriend}
-            disabled={loadingKey === "accept"}
-            className="w-full bg-yellow-500 text-white rounded px-3 py-2 hover:bg-yellow-600 transition-colors disabled:opacity-70"
-          >
-            {loadingKey === "accept" ? "Aceitando..." : "Aceitar Pedido"}
-          </button>
-          <button
-            onClick={onDeclineRequest}
-            disabled={loadingKey === "decline"}
-            className="w-full bg-gray-200 text-gray-800 rounded px-3 py-2 hover:bg-gray-300 transition-colors disabled:opacity-70"
-          >
-            {loadingKey === "decline" ? "Removendo..." : "Recusar/Remover Pedido"}
-          </button>
-        </div>
-      );
-    case "idle":
-    default:
-      return (
-        <button
-          onClick={onAddFriend}
-          disabled={loadingKey === "add"}
-          className="w-full bg-blue-500 text-white rounded px-3 py-2 mt-4 hover:bg-blue-600 transition-colors disabled:opacity-70"
-        >
-          {loadingKey === "add" ? "Enviando..." : "Adicionar Amigo"}
-        </button>
-      );
-  }
-};
-
-/** =========================
- * UI: Sidebar
- * ========================= */
 const ProfileSidebar = ({
   user,
   isMyProfile,
@@ -301,221 +169,162 @@ const ProfileSidebar = ({
   karma,
 }) => {
   const navigate = useNavigate();
-  const [notification, setNotification] = useState("");
-  const [loadingKey, setLoadingKey] = useState(null); // "add" | "accept" | "decline" | null
-
-  const showNotification = useCallback((message) => {
-    setNotification(message);
-    const t = setTimeout(() => setNotification(""), 3000);
-    return () => clearTimeout(t);
-  }, []);
-
-  const handleShare = useCallback(async () => {
-    const ok = await copyToClipboard(window.location.href);
-    showNotification(ok ? "Link do perfil copiado!" : "Não foi possível copiar o link.");
-  }, [showNotification]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddFriend = useCallback(async () => {
-    setLoadingKey("add");
+    setIsSubmitting(true);
     try {
-      await api.post(`/users/${user._id}/request`);
+      await api.post(`/users/${user._id}/friend-request`);
       setFriendStatus("request_sent");
-      showNotification("Pedido de amizade enviado!");
-    } catch (error) {
-      showNotification("Não foi possível enviar o pedido.");
+    } catch (err) {
+      console.error("Erro ao enviar pedido:", err);
     } finally {
-      setLoadingKey(null);
+      setIsSubmitting(false);
     }
-  }, [user?._id, setFriendStatus, showNotification]);
+  }, [user._id, setFriendStatus]);
 
-  // As rotas abaixo assumem uma API REST comum.
-  // Ajuste se a sua API usar endpoints diferentes.
   const handleAcceptFriend = useCallback(async () => {
-    setLoadingKey("accept");
+    setIsSubmitting(true);
     try {
       await api.post(`/users/${user._id}/accept`);
       setFriendStatus("friends");
-      showNotification("Pedido aceito! Agora vocês são amigos.");
-    } catch (error) {
-      showNotification("Não foi possível aceitar o pedido.");
+    } catch (err) {
+      console.error("Erro ao aceitar pedido:", err);
     } finally {
-      setLoadingKey(null);
+      setIsSubmitting(false);
     }
-  }, [user?._id, setFriendStatus, showNotification]);
-
-  const handleDeclineRequest = useCallback(async () => {
-    setLoadingKey("decline");
-    try {
-      await api.post(`/users/${user._id}/decline`);
-      setFriendStatus("idle");
-      showNotification("Pedido removido.");
-    } catch (error) {
-      showNotification("Não foi possível remover o pedido.");
-    } finally {
-      setLoadingKey(null);
-    }
-  }, [user?._id, setFriendStatus, showNotification]);
-
-  const createdAt = safeDate(user?.createdAt);
+  }, [user._id, setFriendStatus]);
 
   return (
-    <div className="card p-4 relative">
-      {notification && (
-        <div
-          className="absolute top-0 left-1/2 -translate-x-1/2 -mt-10 bg-gray-800 text-white text-sm px-3 py-1 rounded-full shadow"
-          role="status"
-        >
-          {notification}
-        </div>
-      )}
+    <div className="card p-6 flex flex-col items-center text-center">
+      <h3 className="text-2xl font-bold text-gray-800">
+        {user.name.split(" ")[0]}'s{" "}
+        <span className="text-sky-500">Karma</span>
+      </h3>
+      <div className="text-5xl font-extrabold text-sky-500 my-4">{karma}</div>
+      <p className="text-gray-500">
+        Karma é a soma de amigos e solicitações de amizade.
+      </p>
 
-      <h2 className="text-lg font-bold mb-4">{user?.name || "Utilizador"}</h2>
+      <div className="w-full flex justify-center gap-2 mt-4">
+        {!isMyProfile && (
+          <button
+            onClick={() => navigate(`/chat/${user._id}`)}
+            className="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 00-1.28.682L5 15v-3.586a1 1 0 00-.293-.707A2 2 0 012 9V5z" />
+            </svg>
+            Conversar
+          </button>
+        )}
 
-      <div className="space-y-4 text-sm">
-        <div>
-          <h3 className="font-semibold flex items-center">
-            <KarmaIcon /> Karma
-          </h3>
-          <p className="ml-8">{karma}</p>
-        </div>
+        {!isMyProfile && friendStatus === "idle" && (
+          <button
+            onClick={handleAddFriend}
+            disabled={isSubmitting}
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg px-4 py-2 transition disabled:opacity-50"
+          >
+            {isSubmitting ? "Enviando..." : "Adicionar Amigo"}
+          </button>
+        )}
 
-        <div>
-          <h3 className="font-semibold flex items-center">
-            <CakeIcon /> Dia do Bolo
-          </h3>
-          <p className="ml-8">
-            {createdAt
-              ? format(createdAt, "d 'de' MMMM 'de' yyyy", { locale: ptBR })
-              : "-"}
-          </p>
-        </div>
+        {!isMyProfile && friendStatus === "request_sent" && (
+          <button
+            disabled
+            className="flex-1 bg-gray-200 text-gray-500 font-medium rounded-lg px-4 py-2"
+          >
+            Solicitação Enviada
+          </button>
+        )}
+
+        {!isMyProfile && friendStatus === "request_received" && (
+          <button
+            onClick={handleAcceptFriend}
+            disabled={isSubmitting}
+            className="flex-1 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg px-4 py-2 transition disabled:opacity-50"
+          >
+            {isSubmitting ? "Aceitando..." : "Aceitar Pedido"}
+          </button>
+        )}
+
+        {!isMyProfile && friendStatus === "friends" && (
+          <button
+            disabled
+            className="flex-1 bg-gray-200 text-gray-500 font-medium rounded-lg px-4 py-2"
+          >
+            Amigos
+          </button>
+        )}
       </div>
 
-      <ActionButton
-        isMyProfile={isMyProfile}
-        friendStatus={friendStatus}
-        onAddFriend={handleAddFriend}
-        onAcceptFriend={handleAcceptFriend}
-        onDeclineRequest={handleDeclineRequest}
-        onEditProfile={() => navigate("/settings")}
-        loadingKey={loadingKey}
-      />
-
-      <button
-        onClick={handleShare}
-        className="w-full flex items-center justify-center bg-transparent text-gray-600 rounded px-3 py-2 mt-2 hover:bg-gray-100 transition-colors"
-        aria-label="Copiar link do perfil"
-        title="Copiar link do perfil"
-      >
-        <ShareIcon /> Partilhar
-      </button>
-    </div>
-  );
-};
-
-/** =========================
- * UI: Filtros de posts
- * ========================= */
-const PostFilters = ({ sortType, setSortType }) => {
-  const filterButtons = [
-    { key: "new", label: "Novos" },
-    { key: "hot", label: "Quentes" },
-    { key: "top", label: "Top" },
-  ];
-
-  return (
-    <div className="flex border-b mb-4 bg-white rounded-t-lg">
-      {filterButtons.map((btn) => (
+      <div className="w-full mt-4 flex flex-col gap-2 border-t pt-4">
+        {isMyProfile && (
+          <Link
+            to="/settings"
+            className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg py-2 transition text-center"
+          >
+            Editar Perfil
+          </Link>
+        )}
         <button
-          key={btn.key}
-          onClick={() => setSortType(btn.key)}
-          className={`px-4 py-2 font-semibold transition-colors ${sortType === btn.key
-              ? "border-b-2 border-blue-500 text-blue-500"
-              : "text-gray-500 hover:text-blue-500"
-            }`}
-          aria-pressed={sortType === btn.key}
+          onClick={() => copyToClipboard(window.location.href)}
+          className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg py-2 transition"
         >
-          {btn.label}
+          Copiar Link
         </button>
-      ))}
+      </div>
     </div>
   );
 };
 
 /** =========================
- * UI: Skeleton
+ * Componente Principal
  * ========================= */
-const SkeletonLoader = () => (
-  <div className="animate-pulse">
-    <div className="grid grid-cols-12 gap-6">
-      <div className="col-span-12 md:col-span-8">
-        <div className="card p-4 mb-4 h-28 bg-gray-200"></div>
-        <div className="card mb-4 h-12 bg-gray-200"></div>
-        <div className="space-y-4">
-          <div className="card h-40 bg-gray-200"></div>
-          <div className="card h-40 bg-gray-200"></div>
-        </div>
-      </div>
-      <div className="col-span-12 md:col-span-4">
-        <div className="card p-4 h-48 bg-gray-200"></div>
-      </div>
-    </div>
-  </div>
-);
 
-/** =========================
- * Página principal
- * ========================= */
 export default function Profile() {
   const { id } = useParams();
+  const [sortType, setSortType] = useState("newest");
   const {
     user,
     posts,
+    friendStatus,
+    setFriendStatus,
+    karma,
     loading,
     error,
     isMyProfile,
     refetch,
-    friendStatus,
-    setFriendStatus,
   } = useUserProfile(id);
 
-  const [sortType, setSortType] = useState("new");
-
   const sortedPosts = useMemo(() => {
-    const list = Array.isArray(posts) ? [...posts] : [];
+    if (!posts) return [];
     switch (sortType) {
-      case "hot": {
-        const score = (p) => (p.likes?.length || 0) - (p.dislikes?.length || 0);
-        return list.sort((a, b) => score(b) - score(a));
-      }
-      case "top":
-        return list.sort(
-          (a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)
+      case "oldest":
+        return [...posts].sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
         );
-      case "new":
+      case "most_liked":
+        return [...posts].sort((a, b) => b.likes.length - a.likes.length);
+      case "newest":
       default:
-        return list.sort(
-          (a, b) =>
-            (safeDate(b?.createdAt)?.getTime() || 0) -
-            (safeDate(a?.createdAt)?.getTime() || 0)
+        return [...posts].sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
         );
     }
   }, [posts, sortType]);
 
-  const karma = useMemo(() => {
-    const list = Array.isArray(posts) ? posts : [];
-    return list.reduce(
-      (acc, p) => acc + (p.likes?.length || 0) - (p.dislikes?.length || 0),
-      0
-    );
-  }, [posts]);
-
   if (loading) {
     return (
-      <div>
+      <div className="bg-gray-50 min-h-screen">
         <Navbar />
-        <div className="container-healer mt-6">
-          <SkeletonLoader />
+        <div className="container-healer mt-6 text-center text-gray-500">
+          Carregando perfil...
         </div>
       </div>
     );
@@ -523,22 +332,14 @@ export default function Profile() {
 
   if (error) {
     return (
-      <div>
+      <div className="bg-gray-50 min-h-screen">
         <Navbar />
-        <div className="container-healer mt-6 text-center card p-8">
-          <p className="text-red-500 font-semibold">{error}</p>
-          <button
-            onClick={refetch}
-            className="mt-4 bg-blue-500 text-white rounded px-4 py-2 hover:bg-blue-600 transition-colors"
-          >
-            Tentar Novamente
-          </button>
+        <div className="container-healer mt-6 text-center text-red-500">
+          {error}
         </div>
       </div>
     );
   }
-
-  if (!user) return null;
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -561,7 +362,10 @@ export default function Profile() {
                     ))
                   ) : (
                     <div className="card p-8 text-center text-gray-500">
-                      <p>Parece que {user?.name || "este usuário"} ainda não publicou nada.</p>
+                      <p>
+                        Parece que {user?.name || "este usuário"} ainda não
+                        publicou nada.
+                      </p>
                     </div>
                   )}
                 </div>

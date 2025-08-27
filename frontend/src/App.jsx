@@ -6,7 +6,7 @@ import Register from "./pages/Register.jsx";
 import Home from "./pages/Home.jsx";
 import Profile from "./pages/Profile.jsx";
 import Settings from "./pages/Settings.jsx"; // 1. Importar a nova página
-
+import ChatPage from "./pages/ChatPage.jsx";
 function Private({ children }) {
   const token = localStorage.getItem("token");
   return token ? children : <Navigate to="/login" />;
@@ -21,6 +21,7 @@ export default function App() {
       <Route path="/profile/:id" element={<Private><Profile /></Private>} />
       {/* 2. Adicionar a nova rota */}
       <Route path="/settings" element={<Private><Settings /></Private>} />
+      <Route path="/chat/:userId" element={<ChatPage />} />
     </Routes>
   )
 }

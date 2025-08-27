@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
+import mongoose from "mongoose"; // 1. Importar mongoose
 import User from "../models/User.js";
 import Post from "../models/Post.js";
 import { authRequired } from "../middleware/auth.js";
@@ -62,6 +63,11 @@ router.post("/:id/accept", authRequired, async (req, res) => {
 
 // get user public profile and posts
 router.get("/:id", authRequired, async (req, res) => {
+  // 2. Adicionar validação para o ID
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(404).json({ error: "Usuário não encontrado" });
+  }
+
   const user = await User.findById(req.params.id).select("-password");
   if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
   const posts = await Post.find({ user: user._id }).sort({ createdAt: -1 });
