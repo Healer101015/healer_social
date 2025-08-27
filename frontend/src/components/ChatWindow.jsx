@@ -14,8 +14,11 @@ const ChatWindow = ({ recipient }) => {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [socketConnected, setSocketConnected] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [typingUsers, setTypingUsers] = useState({});
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -54,11 +57,14 @@ const ChatWindow = ({ recipient }) => {
         socket.on('disconnect', (reason) => {
             console.log('Socket desconectado:', reason);
             setSocketConnected(false);
+            // Limpar status de typing ao desconectar
+            setTypingUsers({});
         });
 
         socket.on('connect_error', (error) => {
             console.error('Erro de conexão socket:', error);
             setSocketConnected(false);
+            setTypingUsers({});
         });
 
         // Evento principal para receber mensagens
@@ -74,6 +80,15 @@ const ChatWindow = ({ recipient }) => {
                         return [...prev, message];
                     }
                     return prev;
+                });
+            }
+
+            // Remover status de typing quando receber mensagem
+            if (message.sender === recipient._id || message.sender._id === recipient._id) {
+                setTypingUsers(prev => {
+                    const newTypingUsers = { ...prev };
+                    delete newTypingUsers[recipient._id];
+                    return newTypingUsers;
                 });
             }
         });
@@ -92,6 +107,40 @@ const ChatWindow = ({ recipient }) => {
             console.error('Erro ao enviar mensagem:', errorData);
             setMessages(prev => prev.filter(msg => msg.tempId !== errorData.tempId));
             alert('Erro ao enviar mensagem. Tente novamente.');
+        });
+
+        // Evento para receber status de typing
+        socket.on('userTyping', (data) => {
+            if (data.userId === recipient._id) {
+                setTypingUsers(prev => ({
+                    ...prev,
+                    [data.userId]: {
+                        isTyping: data.isTyping,
+                    }
+                }));
+
+                // Se parou de digitar, remover após 2 segundos
+                if (!data.isTyping) {
+                    setTimeout(() => {
+                        setTypingUsers(prev => {
+                            const newTypingUsers = { ...prev };
+                            delete newTypingUsers[data.userId];
+                            return newTypingUsers;
+                        });
+                    }, 2000);
+                }
+            }
+        });
+
+        // Evento para receber status de parada de typing
+        socket.on('userStopTyping', (data) => {
+            if (data.userId === recipient._id) {
+                setTypingUsers(prev => {
+                    const newTypingUsers = { ...prev };
+                    delete newTypingUsers[data.userId];
+                    return newTypingUsers;
+                });
+            }
         });
 
         // Buscar mensagens existentes
@@ -114,19 +163,75 @@ const ChatWindow = ({ recipient }) => {
                 socket.off('receiveMessage');
                 socket.off('messageSent');
                 socket.off('messageError');
+                socket.off('userTyping');
+                socket.off('userStopTyping');
                 socket.disconnect();
                 socket = null;
+            }
+
+            // Limpar timeout ao desmontar
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
             }
         };
     }, [recipient._id, me?._id, API_URL]);
 
     useEffect(() => {
-        // Scroll para baixo quando novas mensagens chegarem
+        // Scroll para baixo quando novas mensagens ou typing aparecerem
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [messages, typingUsers]);
+
+
+    // Função para enviar status de typing
+    const handleInputChange = (e) => {
+        const value = e.target.value;
+        setInput(value);
+
+        if (!socketConnected) return;
+
+        // Se começou a digitar e ainda não enviou o evento
+        if (value.length > 0 && !isTyping) {
+            setIsTyping(true);
+            socket.emit('typing', {
+                recipientId: recipient._id,
+                isTyping: true
+            });
+        }
+
+        // Limpar timeout anterior
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        // Configurar timeout para parar de digitar
+        typingTimeoutRef.current = setTimeout(() => {
+            if (isTyping) {
+                setIsTyping(false);
+                socket.emit('typing', {
+                    recipientId: recipient._id,
+                    isTyping: false
+                });
+            }
+        }, 1000); // 1 segundo após parar de digitar
+    };
 
     const handleSendMessage = (e) => {
         e.preventDefault();
+
+        // Parar status de typing antes de enviar
+        if (isTyping) {
+            setIsTyping(false);
+            socket.emit('typing', {
+                recipientId: recipient._id,
+                isTyping: false
+            });
+        }
+
+        // Limpar timeout de typing
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
         if (input.trim() && socketConnected) {
             const tempId = Date.now().toString();
             const tempMessage = {
@@ -154,6 +259,15 @@ const ChatWindow = ({ recipient }) => {
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        // Parar status de typing ao enviar arquivo
+        if (isTyping) {
+            setIsTyping(false);
+            socket.emit('typing', {
+                recipientId: recipient._id,
+                isTyping: false
+            });
+        }
 
         const fileType = file.type.split('/')[0];
         if (!['image', 'video', 'audio'].includes(fileType)) {
@@ -300,6 +414,9 @@ const ChatWindow = ({ recipient }) => {
         });
     };
 
+    // Verificar se o destinatário está digitando
+    const isRecipientTyping = typingUsers[recipient._id]?.isTyping;
+
     return (
         <div className={`fixed bottom-0 right-4 md:right-24 bg-white shadow-2xl rounded-t-lg w-full md:w-96 h-[80vh] md:h-[40rem] flex flex-col transition-all duration-300 ${isMinimized ? 'translate-y-[calc(100%-48px)]' : ''} z-50`}>
             {/* Header */}
@@ -310,7 +427,14 @@ const ChatWindow = ({ recipient }) => {
                         alt={recipient.name}
                         className="w-8 h-8 rounded-full object-cover"
                     />
-                    <span className="font-bold">{recipient.name}</span>
+                    <div className="flex flex-col">
+                        <span className="font-bold">{recipient.name}</span>
+                        {isRecipientTyping && (
+                            <span className="text-xs text-gray-500 italic">
+                                digitando...
+                            </span>
+                        )}
+                    </div>
                     <span className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
                 </div>
                 <button
@@ -366,6 +490,20 @@ const ChatWindow = ({ recipient }) => {
                         </div>
                     ))
                 )}
+
+                {/* Indicador de typing do destinatário */}
+                {isRecipientTyping && (
+                    <div className="flex justify-start mb-3">
+                        <div className="bg-gray-200 text-gray-800 p-3 rounded-lg rounded-bl-none max-w-[80%]">
+                            <div className="flex items-center space-x-1">
+                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div ref={messagesEndRef} />
             </div>
 
@@ -392,7 +530,7 @@ const ChatWindow = ({ recipient }) => {
                     <input
                         type="text"
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={handleInputChange}
                         placeholder="Digite sua mensagem..."
                         className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                         disabled={isUploading || !socketConnected}
