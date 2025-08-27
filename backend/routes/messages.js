@@ -1,26 +1,47 @@
-// backend/routes/messages.js
 import express from "express";
 import Message from "../models/Message.js";
-import { authRequired } from "../middleware/auth.js";
+import { authRequired } from "./auth.js";
 
 const router = express.Router();
 
-// Rota para obter o histórico de mensagens entre dois usuários
-router.get("/:userId", authRequired, async (req, res) => {
+router.post("/", authRequired, async (req, res) => {
     try {
-        const otherUserId = req.params.userId;
-        const myUserId = req.userId;
+        const { recipientId, content } = req.body;
+        const senderId = req.userId;
+
+        if (!recipientId || !content) {
+            return res.status(400).json({ error: "Recipient ID and content are required." });
+        }
+
+        const newMessage = new Message({
+            sender: senderId,
+            recipient: recipientId,
+            content: content,
+        });
+
+        await newMessage.save();
+
+        res.status(201).json(newMessage);
+    } catch (e) {
+        res.status(500).json({ error: "Failed to send message." });
+    }
+});
+
+router.get("/:recipientId", authRequired, async (req, res) => {
+    try {
+        const recipientId = req.params.recipientId;
+        const userId = req.userId;
 
         const messages = await Message.find({
             $or: [
-                { sender: myUserId, recipient: otherUserId },
-                { sender: otherUserId, recipient: myUserId },
-            ],
-        }).sort({ createdAt: 1 }); // Ordena por data de criação
+                { sender: userId, recipient: recipientId },
+                { sender: recipientId, recipient: userId }
+            ]
+        }).sort({ createdAt: 1 });
 
         res.json(messages);
-    } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar mensagens" });
+    } catch (e) {
+        res.status(500).json({ error: "Failed to fetch messages." });
     }
 });
 

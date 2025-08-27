@@ -7,7 +7,6 @@ const MessageSchema = new mongoose.Schema({
     content: { type: String, required: true },
 }, { timestamps: true });
 
-// Adiciona um índice para otimizar buscas por conversas entre dois usuários
 MessageSchema.index({ sender: 1, recipient: 1 });
 MessageSchema.index({ recipient: 1, sender: 1 });
 
