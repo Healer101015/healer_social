@@ -70,6 +70,7 @@ const upload = multer({
 
 const allowedOrigins = [
   "https://healer.japoneix.com",
+  "http://healer.japoneix.com",
   "http://localhost:5173"
 ];
 
