@@ -83,6 +83,7 @@ const upload = multer({
 
 // Middlewares
 app.use(cors(cors));
+app.options("*", cors(cors));
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
