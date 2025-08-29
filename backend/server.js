@@ -22,21 +22,27 @@ import messagesRoutes from "./routes/messages.js";
 
 dotenv.config();
 
+const allowedOrigins = [
+  "https://healer.japoneix.com",
+  "http://healer.japoneix.com",
+  "http://localhost:5173"
+];
+
+const cors = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true
+};
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true
-  }
-});
+const io = new Server(server, cors);
 
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/healer";
@@ -75,25 +81,8 @@ const upload = multer({
   fileFilter
 });
 
-const allowedOrigins = [
-  "https://healer.japoneix.com",
-  "http://healer.japoneix.com",
-  "http://localhost:5173"
-];
-
 // Middlewares
-app.use(cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
-}));
+app.use(cors(cors));
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
