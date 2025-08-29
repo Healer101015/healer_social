@@ -28,7 +28,7 @@ const allowedOrigins = [
   "http://localhost:5173"
 ];
 
-const cors = {
+const corsSettings = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -42,7 +42,7 @@ const cors = {
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, cors);
+const io = new Server(server, corsSettings);
 
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/healer";
@@ -82,8 +82,8 @@ const upload = multer({
 });
 
 // Middlewares
-app.use(cors(cors));
-app.options("*", cors(cors));
+app.use(cors(corsSettings));
+app.options("*", cors(corsSettings));
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
