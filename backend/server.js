@@ -25,6 +25,8 @@ dotenv.config();
 const allowedOrigins = [
   "https://healer.japoneix.com",
   "http://healer.japoneix.com",
+  "https://apihealer.japoneix.com",
+  "https://apihealer.japoneix.com",
   "http://localhost:5173"
 ];
 
