@@ -81,8 +81,6 @@ const upload = multer({
   fileFilter
 });
 
-z
-
 // Middlewares
 app.use(cors(corsSettings));
 app.options("*", cors(corsSettings));
@@ -227,7 +225,7 @@ const handleUpload = async (req, res) => {
       fs.unlinkSync(req.file.path);    
       return;
     }
-    
+
     const fetchResponse = await fetch(process.env.IMAGE_UPLOAD_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
