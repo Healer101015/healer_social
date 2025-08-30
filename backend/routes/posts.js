@@ -8,14 +8,8 @@ import { authRequired } from "../middleware/auth.js";
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + "_" + Math.round(Math.random() * 1e9) + ext);
-  }
-});
-const upload = multer({ storage });
+const upload = multer({ storage: multer.memoryStorage() });
+
 
 // List feed (latest first)
 router.get("/", authRequired, async (req, res) => {
