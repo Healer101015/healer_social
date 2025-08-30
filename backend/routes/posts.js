@@ -57,8 +57,8 @@ router.post("/", authRequired, upload.single("media"), async (req, res) => {
     let mediaUrl = "";
 
     if (req.file.size > 10 * 1024 * 1024) {
-      mediaUrl =
-        "https://cdn.discordapp.com/attachments/1411263605415874590/1411270271423217735/image.png?ex=68b40b5c&is=68b2b9dc&hm=bc2bb17168470e6e96af9f498752c978266995171bb4f1e38a1787c9a483437d&";
+      mediaUrl = "https://cdn.discordapp.com/attachments/1411263605415874590/1411270271423217735/image.png?ex=68b40b5c&is=68b2b9dc&hm=bc2bb17168470e6e96af9f498752c978266995171bb4f1e38a1787c9a483437d&";
+      mediaType = "image";
     } else {
       const fetchResponse = await fetch(process.env.IMAGE_UPLOAD_URL, {
         method: "POST",
