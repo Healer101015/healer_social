@@ -146,9 +146,9 @@ const PostCard = ({ post: initialPost, onDelete, onChanged }) => {
       {p.mediaUrl && (
         <div className="bg-gray-100">
           {p.mediaType === "image" ? (
-            <img src={`${API_URL}${p.mediaUrl}`} className="max-h-[600px] object-contain w-full" />
+            <img src={`${p.mediaUrl}`} className="max-h-[600px] object-contain w-full" />
           ) : (
-            <video controls className="w-full"><source src={`${API_URL}${p.mediaUrl}`} /></video>
+            <video controls className="w-full"><source src={`${p.mediaUrl}`} /></video>
           )}
         </div>
       )}
