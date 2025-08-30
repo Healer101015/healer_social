@@ -1,5 +1,7 @@
 backend/node_modules
 frontend/node_modules
+image_uploader/node_modules
 backend/uploads
 backend/.env
+image_uploader/.env
 .env

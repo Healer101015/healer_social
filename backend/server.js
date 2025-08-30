@@ -81,6 +81,8 @@ const upload = multer({
   fileFilter
 });
 
+z
+
 // Middlewares
 app.use(cors(corsSettings));
 app.options("*", cors(corsSettings));
@@ -190,22 +192,60 @@ io.on("connection", (socket) => {
   socket.on("ping", (callback) => { if (typeof callback === 'function') callback("pong"); });
 });
 
-// Rotas de upload de mídia
 const handleUpload = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
 
     let attachmentType;
-    if (req.file.mimetype.startsWith('image/')) attachmentType = 'image';
-    else if (req.file.mimetype.startsWith('video/')) attachmentType = 'video';
-    else if (req.file.mimetype.startsWith('audio/')) attachmentType = 'audio';
-    else {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: "Tipo de arquivo não suportado" });
+
+    switch (true) {
+      case req.file.mimetype.startsWith('image/'):
+        attachmentType = 'image';
+        break;
+      case req.file.mimetype.startsWith('audio/'):
+        attachmentType = 'audio';
+        break;
+      case req.file.mimetype.startsWith('video/'):
+        attachmentType = 'video';
+        break;
+      default:
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: "Tipo de arquivo não suportado" });
     }
 
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const imageBase64 = fileBuffer.toString('base64');
+    
+    if (req.file.size > 10 * 1024 * 1024) {
+      res.json({
+        fileUrl: "https://cdn.discordapp.com/attachments/1411263605415874590/1411270271423217735/image.png?ex=68b40b5c&is=68b2b9dc&hm=bc2bb17168470e6e96af9f498752c978266995171bb4f1e38a1787c9a483437d&",
+        attachmentType,
+        mimeType: req.file.mimetype,
+        fileName: req.file.originalname,
+        fileSize: req.file.size
+      });
+      fs.unlinkSync(req.file.path);    
+      return;
+    }
+    
+    const fetchResponse = await fetch(process.env.IMAGE_UPLOAD_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageBase64 })
+    });
+
+    if (!fetchResponse.ok) {
+      fs.unlinkSync(req.file.path);
+      return res.status(500).json({ error: "Falha ao enviar para o serviço externo" });
+    }
+
+
+    const responseData = await fetchResponse.json();
+
+    fs.unlinkSync(req.file.path);
+
     res.json({
-      fileUrl: `/uploads/${req.file.filename}`,
+      fileUrl: responseData.url,
       attachmentType,
       mimeType: req.file.mimetype,
       fileName: req.file.originalname,
