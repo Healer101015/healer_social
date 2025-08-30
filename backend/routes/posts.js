@@ -54,11 +54,10 @@ router.post("/", authRequired, upload.single("media"), async (req, res) => {
         mediaType = "video";
         break;
       default:
-        fs.unlinkSync(req.file.path);
         return res.status(400).json({ error: "Tipo de arquivo não suportado" });
     }
 
-    const fileBuffer = fs.readFileSync(req.file.path);
+    const fileBuffer = req.file.buffer;
     const imageBase64 = fileBuffer.toString("base64");
 
     let mediaUrl = "";
@@ -66,7 +65,6 @@ router.post("/", authRequired, upload.single("media"), async (req, res) => {
     if (req.file.size > 10 * 1024 * 1024) {
       mediaUrl =
         "https://cdn.discordapp.com/attachments/1411263605415874590/1411270271423217735/image.png?ex=68b40b5c&is=68b2b9dc&hm=bc2bb17168470e6e96af9f498752c978266995171bb4f1e38a1787c9a483437d&";
-      fs.unlinkSync(req.file.path);
     } else {
       const fetchResponse = await fetch(process.env.IMAGE_UPLOAD_URL, {
         method: "POST",
@@ -75,13 +73,11 @@ router.post("/", authRequired, upload.single("media"), async (req, res) => {
       });
 
       if (!fetchResponse.ok) {
-        fs.unlinkSync(req.file.path);
         return res.status(500).json({ error: "Falha ao enviar para o serviço externo" });
       }
 
       const responseData = await fetchResponse.json();
       mediaUrl = responseData.url;
-      fs.unlinkSync(req.file.path);
     }
 
     const post = await Post.create({
