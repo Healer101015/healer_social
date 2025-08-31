@@ -87,7 +87,7 @@ const ProfileHeader = ({ user }) => (
   <div className="card rounded-lg overflow-hidden shadow-md">
     <div className="h-48 md:h-64 bg-gray-200">
       <img
-        src={getImageUrl(user.coverPhotoUrl.includes('/upload/' ? null : user.coverPhotoUrl), user.name)}
+        src={user.coverPhotoUrl ? user.coverPhotoUrl : getImageUrl(null, user.name)}
         alt={`Foto de capa de ${user.name}`}
         className="w-full h-full object-cover"
       />
@@ -95,7 +95,7 @@ const ProfileHeader = ({ user }) => (
     <div className="relative p-6">
       <div className="absolute -top-16 sm:-top-20 left-6">
         <img
-          src={getImageUrl(user.avatarUrl.includes('/upload/' ? null : user.avatarUrl), user.name)}
+          src={user.avatarUrl ? user.avatarUrl : getImageUrl(null, user.name)}
           alt={`Avatar de ${user.name}`}
           className="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover border-4 border-white shadow-lg"
         />
