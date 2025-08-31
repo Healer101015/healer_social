@@ -25,7 +25,7 @@ export const handleUpload = async (req, res, next) => {
             return {
                 ...file,
                 attachmentType: "unsupported",
-                fileUrl: "https://cdn.discordapp.com/attachments/.../unsupported.png"
+                fileUrl: "https://cdn.discordapp.com/attachments/1411263605415874590/1411518091908747395/image.png?ex=68b4f229&is=68b3a0a9&hm=b42ddf7296cffdf1ab23d179cf6e35ed30a43e1dadbd80518f7f87102e9ad2c5&"
             };
         }
 
@@ -36,14 +36,14 @@ export const handleUpload = async (req, res, next) => {
             const fetchResponse = await fetch(process.env.IMAGE_UPLOAD_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ imageBase64 })
+                body: JSON.stringify({ imageBase64, contentType: file.mimetype })
             });
 
             if (!fetchResponse.ok) {
                 return {
                     ...file,
                     attachmentType,
-                    fileUrl: "https://cdn.discordapp.com/attachments/.../fallback.png"
+                    fileUrl: "https://cdn.discordapp.com/attachments/1411263605415874590/1411518439893241886/image.png?ex=68b4f27c&is=68b3a0fc&hm=a716a3b367eb3287ea319639d950b995b896f48266e69983bab79ad046fcb4a6&"
                 };
             }
 
@@ -59,7 +59,7 @@ export const handleUpload = async (req, res, next) => {
             return {
                 ...file,
                 attachmentType,
-                fileUrl: "https://cdn.discordapp.com/attachments/.../error.png"
+                fileUrl: "https://cdn.discordapp.com/attachments/1411263605415874590/1411518439893241886/image.png?ex=68b4f27c&is=68b3a0fc&hm=a716a3b367eb3287ea319639d950b995b896f48266e69983bab79ad046fcb4a6&"
             };
         }
     };
