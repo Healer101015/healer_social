@@ -144,6 +144,7 @@ router.delete("/:id", authRequired, async (req, res) => {
     await post.remove();
     res.json({ message: "Post deletado com sucesso" });
   } catch (e) {
+    console.log(e);
     res.status(500).json({ error: "Falha ao deletar o post." });
   }
 });
