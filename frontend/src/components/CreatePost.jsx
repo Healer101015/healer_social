@@ -42,18 +42,22 @@ export default function CreatePost({ onCreated }) {
         onChange={e => setText(e.target.value)}
       />
 
+      {file ? <img className="p-5" src={URL.createObjectURL(file)}></img> : null}
+
       <div className="flex items-center justify-between mt-3">
         {/* Botão estilizado para anexar arquivo */}
-        <button
-          type="button"
-          className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-full transition-colors font-medium"
-          onClick={() => fileInputRef.current.click()}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828M15 3h6v6" />
-          </svg>
-          {file ? file.name : "Anexar imagem/vídeo"}
-        </button>
+        <div>
+          <button
+            type="button"
+            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-full transition-colors font-medium"
+            onClick={() => fileInputRef.current.click()}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828M15 3h6v6" />
+            </svg>
+            {file ? file.name : "Anexar imagem/vídeo"}
+          </button>
+        </div>
 
         {/* Input escondido */}
         <input
@@ -71,6 +75,8 @@ export default function CreatePost({ onCreated }) {
         >
           {loading ? "Publicando..." : "Publicar"}
         </button>
+
+        
       </div>
     </form>
   );
