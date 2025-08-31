@@ -7,14 +7,9 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Post from "../models/Post.js";
 import { authRequired } from "../middleware/auth.js";
+import { upload, handleUpload } from "../utils/multer.js";
 
 const router = express.Router();
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, Date.now() + "_" + Math.round(Math.random() * 1e9) + path.extname(file.originalname))
-});
-const upload = multer({ storage });
 
 // get my profile
 router.get("/me", authRequired, async (req, res) => {
@@ -23,11 +18,11 @@ router.get("/me", authRequired, async (req, res) => {
 });
 
 // update profile (avatar, bio, cover photo)
-router.post("/me", authRequired, upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }]), async (req, res) => {
+router.post("/me", authRequired, upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }]), handleUpload, async (req, res) => {
   try {
     const updates = { bio: req.body.bio || "" };
-    if (req.files.avatar) updates.avatarUrl = `/uploads/${req.files.avatar[0].filename}`;
-    if (req.files.coverPhoto) updates.coverPhotoUrl = `/uploads/${req.files.coverPhoto[0].filename}`;
+    if (req.files?.avatar?.[0]?.fileUrl) updates.avatarUrl = req.files.avatar[0].fileUrl;
+    if (req.files?.coverPhoto?.[0]?.fileUrl) updates.coverPhotoUrl = req.files.coverPhoto[0].fileUrl;
 
     const me = await User.findByIdAndUpdate(req.userId, updates, { new: true }).select("-password");
     res.json(me);

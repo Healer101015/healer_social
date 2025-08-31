@@ -1,15 +1,11 @@
 // backend/routes/posts.js
 
 import express from "express";
-import multer from "multer";
-import path from "path";
 import Post from "../models/Post.js";
 import { authRequired } from "../middleware/auth.js";
+import { upload, handleUpload } from "../utils/multer.js";
 
 const router = express.Router();
-
-const upload = multer({ storage: multer.memoryStorage() });
-
 
 // List feed (latest first)
 router.get("/", authRequired, async (req, res) => {
@@ -31,57 +27,16 @@ router.get("/", authRequired, async (req, res) => {
   res.json(posts);
 });
 
-router.post("/", authRequired, upload.single("media"), async (req, res) => {
+router.post("/", authRequired, upload.single("media"), handleUpload, async (req, res) => {
   try {
     const { text } = req.body;
     if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
 
-    let mediaType;
-    switch (true) {
-      case req.file.mimetype.startsWith("image/"):
-        mediaType = "image";
-        break;
-      case req.file.mimetype.startsWith("video/gif"):
-        mediaType = "image";
-        break;
-      case req.file.mimetype.startsWith("audio/"):
-        mediaType = "audio";
-        break;
-      case req.file.mimetype.startsWith("video/"):
-        mediaType = "video";
-        break;
-      default:
-        return res.status(400).json({ error: "Tipo de arquivo não suportado" });
-    }
-
-    const fileBuffer = req.file.buffer;
-    const imageBase64 = fileBuffer.toString("base64");
-
-    let mediaUrl = "";
-
-    if (req.file.size > 10 * 1024 * 1024) {
-      mediaUrl = "https://cdn.discordapp.com/attachments/1411263605415874590/1411270271423217735/image.png?ex=68b40b5c&is=68b2b9dc&hm=bc2bb17168470e6e96af9f498752c978266995171bb4f1e38a1787c9a483437d&";
-      mediaType = "image";
-    } else {
-      const fetchResponse = await fetch(process.env.IMAGE_UPLOAD_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64 }),
-      });
-
-      if (!fetchResponse.ok) {
-        return res.status(500).json({ error: "Falha ao enviar para o serviço externo" });
-      }
-
-      const responseData = await fetchResponse.json();
-      mediaUrl = responseData.url;
-    }
-
     const post = await Post.create({
       user: req.userId,
       text: text || "",
-      mediaUrl,
-      mediaType,
+      mediaUrl: req.file.fileUrl,
+      mediaType: req.file.attachmentType
     });
 
     res.json(await post.populate("user", "name avatarUrl _id"));

@@ -97,7 +97,11 @@ const SuggestionItem = ({ user, onAddFriend }) => {
     }
   };
 
-  const avatarUrl = user.avatarUrl ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.avatarUrl}` : null;
+  let avatarUrl = user.avatarUrl ? `${user.avatarUrl}` : null;
+
+  console.log(avatarUrl);
+
+  if (avatarUrl && avatarUrl.includes("/uploads/")) avatarUrl = null;
 
   return (
     <li className="flex justify-between items-center transition-opacity duration-300">

@@ -22,7 +22,7 @@ const AddFriendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h
 // --- Helpers ---
 const getApiBase = () => import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getImageUrl = (path, name = "user") => {
-  if (path) return `${getApiBase()}${path}`;
+  if (path) return `${path}`;
   const encodedName = encodeURIComponent(name);
   return `https://ui-avatars.com/api/?name=${encodedName}&background=random&color=fff&size=256`;
 };
