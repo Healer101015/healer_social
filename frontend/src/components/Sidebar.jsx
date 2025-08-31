@@ -99,8 +99,6 @@ const SuggestionItem = ({ user, onAddFriend }) => {
 
   let avatarUrl = user.avatarUrl ? `${user.avatarUrl}` : null;
 
-  console.log(avatarUrl);
-
   if (avatarUrl && avatarUrl.includes("/uploads/")) avatarUrl = null;
 
   return (

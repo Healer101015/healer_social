@@ -214,7 +214,6 @@ const PostCard = ({ post: initialPost, onDelete, onChanged }) => {
             <Link to={`/profile/${post.user._id}`} className="font-semibold hover:underline">{post.user.name}</Link> partilhou isto
           </div>
           <div className="mx-4 mb-4 border rounded-lg overflow-hidden">
-            {console.log(post.repostOf)}
             {renderPostContent(post.repostOf)}
           </div>
           {/* Ações (reagir, comentar) aplicam-se à PARTILHA, não ao post original */}
