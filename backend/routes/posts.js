@@ -41,6 +41,9 @@ router.post("/", authRequired, upload.single("media"), async (req, res) => {
       case req.file.mimetype.startsWith("image/"):
         mediaType = "image";
         break;
+      case req.file.mimetype.startsWith("video/gif"):
+        mediaType = "image";
+        break;
       case req.file.mimetype.startsWith("audio/"):
         mediaType = "audio";
         break;
