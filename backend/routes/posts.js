@@ -30,13 +30,13 @@ router.get("/", authRequired, async (req, res) => {
 router.post("/", authRequired, upload.single("media"), handleUpload, async (req, res) => {
   try {
     const { text } = req.body;
-    if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+    //if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
 
     const post = await Post.create({
       user: req.userId,
       text: text || "",
-      mediaUrl: req.file.fileUrl,
-      mediaType: req.file.attachmentType
+      mediaUrl: req.file?.fileUrl || null,
+      mediaType: req.file?.attachmentType || null
     });
 
     res.json(await post.populate("user", "name avatarUrl _id"));
