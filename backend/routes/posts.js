@@ -93,7 +93,8 @@ router.post("/:id/react", authRequired, async (req, res) => {
   const populatedPost = await Post.findById(post._id)
     .populate("user", "name avatarUrl _id")
     .populate("comments.user", "name avatarUrl _id")
-    .populate("reactions.user", "name avatarUrl _id");
+    .populate("reactions.user", "name avatarUrl _id")
+    .populate("repostOf");
   res.json(populatedPost);
 });
 
@@ -132,7 +133,8 @@ router.post("/:id/comment", authRequired, async (req, res) => {
   const populated = await Post.findById(post._id)
     .populate("user", "name avatarUrl _id")
     .populate("comments.user", "name avatarUrl _id")
-    .populate("reactions.user", "name avatarUrl _id");
+    .populate("reactions.user", "name avatarUrl _id")
+    .populate("repostOf");
   res.json(populated);
 });
 

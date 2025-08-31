@@ -20,6 +20,8 @@ const PostSchema = new mongoose.Schema({
   comments: [CommentSchema],
   repostOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' }, // NOVO: Para partilhas
   isEdited: { type: Boolean, default: false }, // NOVO: Flag de edição
+  updatedAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
 export default mongoose.model("Post", PostSchema);
