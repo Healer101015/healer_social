@@ -55,6 +55,7 @@ const ReactionPicker = ({ onSelect, onHover }) => {
     <div
       className="absolute bottom-full mb-2 flex gap-1 bg-white p-1 rounded-full shadow-lg border"
       onMouseLeave={() => onHover(false)}
+      onMouseEnter={() => onHover(true)}
     >
       {reactions.map(r => (
         <button
@@ -219,7 +220,7 @@ const PostCard = ({ post: initialPost, onDelete, onChanged }) => {
         </div>
 
         <div className="flex gap-1 text-gray-600 border-t pt-1">
-          <div className="relative flex-1" onMouseEnter={() => setShowReactionPicker(true)} onMouseLeave={() => setShowReactionPicker(false)}>
+          <div className="relative flex-1" onMouseEnter={() => setShowReactionPicker(true)}>
             {showReactionPicker && <ReactionPicker onSelect={handleReaction} onHover={setShowReactionPicker} />}
             <button onClick={() => handleReaction(myReaction ? myReaction.type : 'like')} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-gray-100 font-medium">
               {getReactionButtonContent()}
