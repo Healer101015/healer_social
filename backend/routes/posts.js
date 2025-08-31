@@ -136,4 +136,16 @@ router.post("/:id/comment", authRequired, async (req, res) => {
   res.json(populated);
 });
 
+router.delete("/:id", authRequired, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+    if (post.user.toString() !== req.userId) return res.status(403).json({ error: "Não autorizado" });
+    await post.remove();
+    res.json({ message: "Post deletado com sucesso" });
+  } catch (e) {
+    res.status(500).json({ error: "Falha ao deletar o post." });
+  }
+});
+
 export default router;
