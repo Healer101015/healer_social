@@ -225,7 +225,9 @@ const ProfileDropdown = () => {
     navigate("/login");
   };
 
-  const avatarUrl = user.avatarUrl ? `${API_URL}${user.avatarUrl}` : null;
+  let avatarUrl = user.avatarUrl ? `${user.avatarUrl}` : null;
+
+  if (avatarUrl && avatarUrl.includes("/uploads/")) avatarUrl = null
 
   return (
     <div className="relative" ref={dropdownRef}>
