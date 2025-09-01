@@ -24,21 +24,32 @@ app.post('/upload', async (req, res) => {
     }
 
     try {
-        if(contentType.includes("image")){
-            const formatData = new URLSearchParams();
+        if (contentType.includes("image")) {
+            const formatData = new FormData();
 
+            formatData.append('key', '6d207e02198a847aa98d0a2a901485a5');
+            formatData.append('action', 'upload');
             formatData.append('source', imageBase64);
-            const free_respose = await fetch("https://freeimage.host/api/1/upload/?key=6d207e02198a847aa98d0a2a901485a5", {
-                method: "POST",
-                body: formatData
-            })
+            formatData.append('format', 'json');
 
-            const free_data = await free_respose.json();
-            if(free_data.status_code !== 200){
-                return res.status(500).json({ error: 'Failed to upload image to freeimage.host' });
+            try {
+                const free_response = await fetch("https://freeimage.host/api/1/upload", {
+                    method: "POST",
+                    body: formatData
+                });
+
+                const free_data = await free_response.json();
+
+                if (free_data.status_code !== 200) {
+                    return res.status(500).json({ error: 'Failed to upload image to freeimage.host' });
+                }
+
+                return res.status(200).json({ message: 'Image uploaded successfully', url: free_data.image.display_url });
+
+            } catch (err) {
+                console.error(err);
+                return res.status(500).json({ error: 'Request failed' });
             }
-
-            return res.status(200).json({ message: 'Image uploaded successfully', url: free_data.image.display_url });
         }
 
         const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID);
