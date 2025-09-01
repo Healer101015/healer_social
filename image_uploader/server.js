@@ -25,7 +25,7 @@ app.post('/upload', async (req, res) => {
 
     try {
         if(contentType.includes("image")){
-            const formatData = new formatData();
+            const formatData = new URLSearchParams();
 
             formatData.append('source', imageBase64);
             const free_respose = await fetch("https://freeimage.host/api/1/upload/?key=6d207e02198a847aa98d0a2a901485a5", {
@@ -49,7 +49,7 @@ app.post('/upload', async (req, res) => {
 
         const buffer = Buffer.from(imageBase64, 'base64');
         const image_respose = await channel.send({ files: [{ attachment: buffer, name }] });
-        
+
         res.status(200).json({ message: 'Image uploaded successfully', url: image_respose.attachments.first().url });
     } catch (error) {
         console.error('Error uploading image:', error);
