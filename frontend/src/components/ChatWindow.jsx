@@ -423,7 +423,7 @@ const ChatWindow = ({ recipient }) => {
             <div className="flex items-center justify-between p-2 bg-gray-100 rounded-t-lg cursor-pointer" onClick={() => setIsMinimized(!isMinimized)}>
                 <div className="flex items-center gap-2">
                     <img
-                        src={recipient.avatarUrl ? `${API_URL}${recipient.avatarUrl}` : 'https://via.placeholder.com/40'}
+                        src={recipient.avatarUrl ? `${recipient.avatarUrl}` : 'https://via.placeholder.com/40'}
                         alt={recipient.name}
                         className="w-8 h-8 rounded-full object-cover"
                     />
